@@ -150,7 +150,7 @@ function Journal() {
 
                 {/* Entries for this week */}
                 <div className="grid gap-4 pl-5 border-l-2 border-primary/20 ml-5">
-                  {groupedByWeek[week].map((log, index) => {
+                  {groupedByWeek[week].map((log: PregnancyLog, index: number) => {
                     const mood =
                       moodConfig[log.mood as keyof typeof moodConfig];
                     const MoodIcon = mood.icon;

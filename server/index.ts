@@ -1,5 +1,8 @@
-import { config } from 'dotenv';
-config({ path: '.env.local' });
+// server/index.ts (FINAL, FIXED VERSION)
+
+// NOTE: dotenv is now loaded via the "dev" script in package.json.
+// Removed: import { config } from 'dotenv';
+// Removed: config({ path: '.env.local' }); 
 
 import express, { type Request, Response, NextFunction } from "express";
 import { serveStatic } from "./static";
@@ -82,14 +85,15 @@ app.use((req, res, next) => {
   }
 
   const port = parseInt(process.env.PORT || "5000", 10);
+  
+  // FIXED LISTEN BLOCK (Resolves ENOTSUP error)
   httpServer.listen(
     {
       port,
-      host: "0.0.0.0",
-      reusePort: true,
+      host: "127.0.0.1", // FIX: Changed from "0.0.0.0"
     },
     () => {
-      log(`serving on port ${port}`);
+      log(`serving on http://localhost:${port}`); 
     },
   );
 })();

@@ -1,16 +1,25 @@
-import { useMemo, useState } from "react";
-import { differenceInWeeks, differenceInDays, addWeeks } from "date-fns";
+// client/src/hooks/usePregnancyState.ts (FINAL LOOP-FIXING VERSION)
 
-const STORAGE_DUE_KEY = "bump_due_date";
-const STORAGE_NAME_KEY = "bump_baby_name";
-const STORAGE_SEX_KEY = "bump_baby_sex";
+import { useMemo, useState, useEffect } from "react";
+import { differenceInWeeks, differenceInDays } from "date-fns";
+import { useQuery } from "@tanstack/react-query"; 
+import { useAuth } from "@/hooks/useAuth"; 
+import { supabase } from "@/lib/supabase";
+
 const TOTAL_PREGNANCY_WEEKS = 40;
 
 export type BabySex = "boy" | "girl" | "unknown";
 
 export interface PregnancyState {
-  dueDate: Date | undefined;
-  setDueDate: (date: Date | undefined) => void;
+  dueDate: Date | null; 
+  setDueDate: (date: Date | null) => void; 
+  isProfileLoading: boolean; 
+  isOnboardingComplete: boolean; 
+  // FIX: Exposed setter to manually update the completion flag locally
+  setIsOnboardingComplete: (isComplete: boolean) => void; 
+  // FIX: Expose refetch
+  refetch: () => void;
+
   currentWeek: number;
   daysRemaining: number;
   today: Date;
@@ -23,75 +32,76 @@ export interface PregnancyState {
   setBabySex: (sex: BabySex) => void;
 }
 
+// Data fetching function for React Query
+const fetchProfileData = async (userId: string | undefined) => {
+  if (!userId) return null;
+  
+  const { data, error } = await supabase
+    .from("pregnancy_profiles")
+    .select("due_date, baby_name, baby_sex, onboarding_complete") 
+    .eq("user_id", userId)
+    .single();
+
+  if (error && error.code !== "PGRST116") { 
+    throw error;
+  }
+  
+  return data; 
+};
+
 export function usePregnancyState(): PregnancyState {
-  // Due date
-  const [dueDate, setDueDateState] = useState<Date | undefined>(() => {
-    if (typeof window === "undefined") return undefined;
+  const { user, loading: authLoading } = useAuth(); 
 
-    const saved = localStorage.getItem(STORAGE_DUE_KEY);
-    if (saved) {
-      const parsed = new Date(saved);
-      if (!Number.isNaN(parsed.getTime())) {
-        return parsed;
-      }
+  // 1. Fetch profile data using React Query
+  const { data: profile, isLoading: isProfileFetching, refetch } = useQuery({
+    queryKey: ["pregnancyProfile", user?.id],
+    queryFn: () => fetchProfileData(user?.id),
+    enabled: !!user,
+    staleTime: 1000 * 60,
+  });
+
+  // Local state initialized to null/unknown/false until data is loaded
+  const [dueDate, setDueDateState] = useState<Date | null>(null);
+  const [babyNameState, setBabyNameState] = useState<string | null>(null);
+  const [babySexState, setBabySexState] = useState<BabySex>("unknown");
+  const [isOnboardingCompleteState, setIsOnboardingCompleteState] = useState(false); 
+
+  // 2. Sync fetched data to component state
+  useEffect(() => {
+    if (profile) {
+      setDueDateState(profile.due_date ? new Date(profile.due_date) : null);
+      setBabyNameState(profile.baby_name ?? null);
+      setBabySexState(profile.baby_sex ?? "unknown");
+      setIsOnboardingCompleteState(profile.onboarding_complete ?? false); 
+    } else if (!isProfileFetching && user && !authLoading) {
+      // New user, profile not yet created/fetched
+      setDueDateState(null);
+      setBabyNameState(null);
+      setBabySexState("unknown");
+      setIsOnboardingCompleteState(false);
     }
+  }, [profile, isProfileFetching, user, authLoading]);
 
-    // Fallback: 20 weeks from now so the UI doesn’t look empty if nothing is set yet
-    return addWeeks(new Date(), 20);
-  });
-
-  // Baby name
-  const [babyNameState, setBabyNameState] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    const stored = localStorage.getItem(STORAGE_NAME_KEY);
-    return stored ? stored : null;
-  });
-
-  // Baby sex
-  const [babySexState, setBabySexState] = useState<BabySex>(() => {
-    if (typeof window === "undefined") return "unknown";
-    const stored = localStorage.getItem(STORAGE_SEX_KEY) as BabySex | null;
-    return stored === "boy" || stored === "girl" || stored === "unknown"
-      ? stored
-      : "unknown";
-  });
 
   const today = useMemo(() => new Date(), []);
 
-  // Persist due date
-  const setDueDate = (date: Date | undefined) => {
+  const setDueDate = (date: Date | null) => {
     setDueDateState(date);
-    if (typeof window === "undefined") return;
-
-    if (date) {
-      localStorage.setItem(STORAGE_DUE_KEY, date.toISOString());
-    } else {
-      localStorage.removeItem(STORAGE_DUE_KEY);
-    }
+    refetch(); 
   };
-
-  // Persist baby name
   const setBabyName = (name: string | null) => {
     setBabyNameState(name);
-    if (typeof window === "undefined") return;
-
-    if (name && name.trim().length > 0) {
-      localStorage.setItem(STORAGE_NAME_KEY, name.trim());
-    } else {
-      localStorage.removeItem(STORAGE_NAME_KEY);
-    }
+    refetch();
   };
-
-  // Persist baby sex
   const setBabySex = (sex: BabySex) => {
     setBabySexState(sex);
-    if (typeof window === "undefined") return;
-    localStorage.setItem(STORAGE_SEX_KEY, sex);
+    refetch();
   };
 
-  // Pregnancy metrics
+
+  // 4. Pregnancy metrics calculation (omitted for brevity)
   const pregnancyMetrics = useMemo(() => {
-    if (!dueDate) {
+    if (!dueDate) { 
       return {
         currentWeek: 0,
         daysRemaining: 280,
@@ -99,7 +109,7 @@ export function usePregnancyState(): PregnancyState {
         progress: 0,
       };
     }
-
+    
     const weeksUntilDue = differenceInWeeks(dueDate, today);
     const rawWeek = TOTAL_PREGNANCY_WEEKS - weeksUntilDue;
 
@@ -126,6 +136,9 @@ export function usePregnancyState(): PregnancyState {
     };
   }, [dueDate, today]);
 
+  // Total loading state combines auth and profile fetching
+  const isProfileLoading = authLoading || isProfileFetching;
+
   return {
     dueDate,
     setDueDate,
@@ -135,5 +148,10 @@ export function usePregnancyState(): PregnancyState {
     setBabyName,
     babySex: babySexState,
     setBabySex,
+    isProfileLoading,
+    isOnboardingComplete: isOnboardingCompleteState, 
+    // EXPOSE FIXES
+    setIsOnboardingComplete: setIsOnboardingCompleteState, 
+    refetch, 
   };
 }

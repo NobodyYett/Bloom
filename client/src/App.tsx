@@ -12,31 +12,75 @@ import Journal from "@/pages/journal";
 import Login from "@/pages/login";
 import Onboarding from "@/pages/onboarding";
 import Appointments from "@/pages/appointments";
-import Settings from "@/pages/settings"; // <--- Imported Settings Page
+import Settings from "@/pages/settings";
 
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
+import { usePregnancyState } from "@/hooks/usePregnancyState"; 
+import { supabase } from "./lib/supabase"; 
 
 // Simple auth gate that works with wouter
 function RequireAuth({ children }: { children: JSX.Element }) {
-  const { user, loading } = useAuth();
+  const { user, loading: authLoading } = useAuth(); 
+  const { isProfileLoading, isOnboardingComplete } = usePregnancyState(); 
   const [, navigate] = useLocation();
 
+  // 1. Profile Creation Check/Insert
   useEffect(() => {
-    if (!loading && !user) {
-      navigate("/login");
+    if (user && !authLoading) {
+      async function ensureProfileExists() {
+        const { data: existing } = await supabase
+          .from("pregnancy_profiles")
+          .select("id")
+          .eq("user_id", user.id)
+          .single();
+        
+        if (!existing) {
+          const { error: insertError } = await supabase
+            .from("pregnancy_profiles")
+            .insert({ user_id: user.id });
+            
+          if (insertError && insertError.code !== "23505") {
+            console.error("Profile creation failed:", insertError);
+          }
+        }
+      }
+      ensureProfileExists();
     }
-  }, [loading, user, navigate]);
+  }, [user, authLoading]);
 
-  if (loading) {
+  // 2. Authentication and Onboarding Redirect Logic
+  useEffect(() => {
+    if (authLoading) return;
+
+    if (!user) {
+      navigate("/login");
+      return;
+    }
+    
+    if (isProfileLoading) { 
+      return; 
+    }
+    
+    if (user && !isOnboardingComplete) {
+      localStorage.removeItem("bump_skip_due"); 
+      navigate("/onboarding");
+      return; 
+    }
+
+    if (isOnboardingComplete && window.location.pathname === "/onboarding") {
+      navigate("/");
+    }
+  }, [authLoading, user, isProfileLoading, isOnboardingComplete, navigate]); 
+
+  if (authLoading || isProfileLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center text-muted-foreground">
-        Checking your session...
+        Loading your profile...
       </div>
     );
   }
 
   if (!user) {
-    // While redirecting, don't flash protected content
     return null;
   }
 
@@ -46,10 +90,8 @@ function RequireAuth({ children }: { children: JSX.Element }) {
 function Router() {
   return (
     <Switch>
-      {/* Public route */}
       <Route path="/login" component={Login} />
 
-      {/* Protected routes */}
       <Route path="/onboarding">
         {() => (
           <RequireAuth>
@@ -57,7 +99,7 @@ function Router() {
           </RequireAuth>
         )}
       </Route>
-
+      
       <Route path="/appointments">
         {() => (
           <RequireAuth>
@@ -82,7 +124,6 @@ function Router() {
         )}
       </Route>
 
-      {/* Added Settings Route */}
       <Route path="/settings">
         {() => (
           <RequireAuth>
@@ -99,7 +140,6 @@ function Router() {
         )}
       </Route>
 
-      {/* Fallback */}
       <Route>
         <NotFound />
       </Route>
@@ -107,7 +147,6 @@ function Router() {
   );
 }
 
-// Single App, all providers combined
 export default function App() {
   return (
     <AuthProvider>

@@ -1,3 +1,5 @@
+// client/src/components/layout.tsx (FINAL VERSION)
+
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import {
@@ -18,8 +20,10 @@ import { useAuth } from "@/hooks/useAuth";
 
 interface LayoutProps {
   children: React.ReactNode;
-  dueDate: Date | undefined;
-  setDueDate: (date: Date | undefined) => void;
+  // FIX: Change type from Date | undefined to Date | null
+  dueDate: Date | null; 
+  // FIX: Change function signature from Date | undefined to Date | null
+  setDueDate: (date: Date | null) => void; 
 }
 
 export function Layout({ children, dueDate, setDueDate }: LayoutProps) {
@@ -85,7 +89,8 @@ export function Layout({ children, dueDate, setDueDate }: LayoutProps) {
             className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
             value={dueDate ? format(dueDate, "yyyy-MM-dd") : ""}
             onChange={(e) => {
-              const date = e.target.value ? new Date(e.target.value) : undefined;
+              // FIX: Pass null instead of undefined if the date input is cleared
+              const date = e.target.value ? new Date(e.target.value) : null;
               setDueDate(date);
             }}
           />

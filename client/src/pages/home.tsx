@@ -36,24 +36,13 @@ export default function Home() {
   const { user } = useAuth();
   const [nextAppt, setNextAppt] = useState<NextAppt | null>(null);
 
-  // local UI state for editing the name in the hero
   const [editingName, setEditingName] = useState(false);
   const [tempName, setTempName] = useState(babyName ?? "");
 
-  // Redirect to onboarding if needed
-  useEffect(() => {
-    const skipped = localStorage.getItem("bump_skip_due") === "true";
-    if (!dueDate && !skipped) {
-      window.location.href = "/onboarding";
-    }
-  }, [dueDate]);
-
-  // Keep tempName in sync if babyName changes elsewhere (e.g., onboarding)
   useEffect(() => {
     setTempName(babyName ?? "");
   }, [babyName]);
 
-  // Hero title logic
   const heroTitle =
     !dueDate || currentWeek <= 0
       ? "Welcome"
@@ -70,13 +59,14 @@ export default function Home() {
       ? `${daysRemaining} days to go! You're doing amazing.`
       : currentWeek > 0 && daysRemaining <= 0
       ? "Your due date has arrived! Best wishes! 🎉"
-      : "Let’s set your due date to start your journey.";
+      : "Let's set your due date to start your journey.";
 
-  // Load next appointment
   useEffect(() => {
     if (!user) return;
 
     async function loadNext() {
+      if (!user) return;
+      
       const nowIso = new Date().toISOString();
       const { data, error } = await supabase
         .from("pregnancy_appointments")
@@ -112,7 +102,6 @@ export default function Home() {
   return (
     <Layout dueDate={dueDate} setDueDate={setDueDate}>
       <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-        {/* HEADER */}
         <section className="relative rounded-3xl overflow-hidden p-8 md:p-12 text-white">
           <div
             className="absolute inset-0 bg-cover bg-center z-0"
@@ -131,7 +120,7 @@ export default function Home() {
                     <Input
                       value={tempName}
                       onChange={(e) => setTempName(e.target.value)}
-                      placeholder="Type baby’s name or leave blank"
+                      placeholder="Type baby's name or leave blank"
                       className="bg-white/80"
                     />
                     <div className="flex gap-2">
@@ -179,17 +168,13 @@ export default function Home() {
           </div>
         </section>
 
-        {/* MAIN GRID */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {/* LEFT SIDE */}
           <div className="md:col-span-2 space-y-8">
             <BabySizeDisplay currentWeek={currentWeek} />
 
-            {/* CURRENT PROGRESS TILE WITH APPOINTMENT INSIDE */}
             <div className="bg-card rounded-xl p-6 border border-border shadow-sm space-y-4">
               <WeekProgress currentWeek={currentWeek} />
 
-              {/* NEXT APPOINTMENT BLOCK */}
               <Link href="/appointments">
                 <div
                   className={cn(
@@ -204,14 +189,9 @@ export default function Home() {
                       <p className="text-sm font-semibold text-primary tracking-wide uppercase">
                         Next Appointment
                       </p>
-
                       <p className="text-sm font-medium text-foreground">
-                        {format(
-                          new Date(nextAppt.starts_at),
-                          "EEE, MMM d • p"
-                        )}
+                        {format(new Date(nextAppt.starts_at), "EEE, MMM d • p")}
                       </p>
-
                       <p className="text-sm text-muted-foreground">
                         {nextAppt.title}
                         {nextAppt.location ? ` • ${nextAppt.location}` : ""}
@@ -222,7 +202,6 @@ export default function Home() {
                       <p className="text-sm font-semibold text-muted-foreground tracking-wide uppercase">
                         Next Appointment
                       </p>
-
                       <p className="text-sm text-muted-foreground">
                         No upcoming appointments.
                       </p>
@@ -233,13 +212,11 @@ export default function Home() {
             </div>
           </div>
 
-          {/* RIGHT SIDE */}
           <div className="space-y-8">
             <DailyCheckIn currentWeek={currentWeek} />
           </div>
         </div>
 
-        {/* WEEKLY WISDOM */}
         <WeeklyWisdom currentWeek={currentWeek} trimester={trimester} />
       </div>
     </Layout>
