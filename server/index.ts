@@ -90,7 +90,7 @@ app.use((req, res, next) => {
   httpServer.listen(
     {
       port,
-      host: "127.0.0.1", // FIX: Changed from "0.0.0.0"
+      host: "0.0.0.0", // FIX: Changed from "0.0.0.0"
     },
     () => {
       log(`serving on http://localhost:${port}`); 
