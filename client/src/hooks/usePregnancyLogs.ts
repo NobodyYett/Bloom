@@ -8,19 +8,32 @@ import { useAuth } from "@/hooks/useAuth";
 type Mood = "happy" | "neutral" | "sad";
 
 type CreateLogInput = {
-  date: string;       // "yyyy-MM-dd"
+  date: string; // "yyyy-MM-dd"
   week: number;
   mood: Mood;
   symptoms?: string;
   notes?: string;
 };
 
-// simple slot helper; we can reuse later for notifications
-export function getTimeOfDaySlot(d: Date = new Date()): "morning" | "afternoon" | "evening" {
+// Normalize Supabase column names to match UI expectations.
+// Supabase returns `created_at`, while some UI code expects `createdAt`.
+function normalizeLogRow<T extends Record<string, any>>(row: T): T & { createdAt?: string } {
+  if (!row) return row as any;
+
+  const createdAt = (row as any).createdAt ?? (row as any).created_at;
+  if (createdAt !== undefined && (row as any).createdAt === undefined) {
+    return { ...(row as any), createdAt };
+  }
+  return row as any;
+}
+
+export function getTimeOfDaySlot(
+  d: Date = new Date(),
+): "morning" | "afternoon" | "evening" {
   const hour = d.getHours();
-  if (hour < 12) return "morning";      // before noon
-  if (hour < 18) return "afternoon";    // 12:00–17:59
-  return "evening";                     // 18:00+
+  if (hour < 12) return "morning"; // before noon
+  if (hour < 18) return "afternoon"; // 12:00–17:59
+  return "evening"; // 18:00+
 }
 
 // ---- queries ----
@@ -43,7 +56,7 @@ export function usePregnancyLogs() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []).map(normalizeLogRow);
     },
   });
 }
@@ -66,7 +79,7 @@ export function useTodayLogs(date: string) {
         .order("created_at", { ascending: true });
 
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []).map(normalizeLogRow);
     },
   });
 }
@@ -110,7 +123,7 @@ export function useCreatePregnancyLog() {
         .single();
 
       if (error) throw error;
-      return data;
+      return normalizeLogRow(data as any);
     },
     onSuccess: (_data, vars) => {
       // refresh overall list + today's list
