@@ -1,20 +1,27 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
-import { Apple, Chrome } from "lucide-react"; // icons
+import { Apple, Chrome } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Login() {
-  const [loadingProvider, setLoadingProvider] = useState<null | "google" | "apple">(null);
+  const [loadingProvider, setLoadingProvider] = useState<
+    null | "google" | "apple"
+  >(null);
   const { toast } = useToast();
 
   async function handleSignIn(provider: "google" | "apple") {
     try {
       setLoadingProvider(provider);
 
+      const redirectTo =
+        typeof window !== "undefined"
+          ? `${window.location.origin}/auth/callback`
+          : undefined;
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
-        // When deployed, we will configure a specific redirect.
+        options: redirectTo ? { redirectTo } : undefined,
       });
 
       if (error) {
@@ -60,11 +67,10 @@ export default function Login() {
           {/* 🌸 Congratulations / reminder message */}
           <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 mb-3">
             <p className="text-sm leading-relaxed text-primary blossom-script">
-              A gentle remind to you that every pregnancy is unique. 
-             
+              A gentle reminder to you that every pregnancy is unique.
             </p>
             <p className="text-sm leading-relaxed text-primary blossom-script">
-                 We are honored to help guide yours.
+              We are honored to help guide yours.
             </p>
           </div>
 
@@ -82,17 +88,22 @@ export default function Login() {
             onClick={() => handleSignIn("google")}
           >
             <Chrome className="w-4 h-4" />
-            {loadingProvider === "google" ? "Connecting to Google..." : "Continue with Google"}
+            {loadingProvider === "google"
+              ? "Connecting to Google..."
+              : "Continue with Google"}
           </Button>
 
-          {/* Apple – leave disabled for now if not configured */}
+          {/* ✅ Apple (enabled + wired) */}
           <Button
             type="button"
             className="w-full flex items-center justify-center gap-2 bg-black text-white hover:bg-black/90"
-            disabled={true} // we’ll enable this later once Apple auth is set up
+            disabled={loadingProvider !== null}
+            onClick={() => handleSignIn("apple")}
           >
             <Apple className="w-4 h-4" />
-            Coming soon: Sign in with Apple
+            {loadingProvider === "apple"
+              ? "Connecting to Apple..."
+              : "Continue with Apple"}
           </Button>
         </div>
 

@@ -24,37 +24,42 @@ function RequireAuth({ children }: { children: JSX.Element }) {
   const { isProfileLoading, isOnboardingComplete } = usePregnancyState();
   const [, navigate] = useLocation();
 
-  // 1. Profile Creation Check/Insert (hardened)
+  // Ensure a pregnancy profile exists for every authenticated user.
+  // IMPORTANT:
+  // - Your pregnancy_profiles table does NOT have an `id` column (per console error).
+  // - So we check/select `user_id` instead of `id`.
+  // - We use an UPSERT to avoid race conditions and to "create if missing" without a separate check.
   useEffect(() => {
     if (!user || authLoading) return;
 
     let cancelled = false;
 
     async function ensureProfileExists() {
+      // Quick existence check (select a column that actually exists)
       const { data: existing, error: selectError } = await supabase
         .from("pregnancy_profiles")
-        .select("id")
+        .select("user_id")
         .eq("user_id", user.id)
         .maybeSingle();
 
       if (cancelled) return;
 
-      // If we can't reliably check, do NOT attempt insert (prevents false inserts on RLS/network issues)
+      // If lookup fails for real reasons (RLS/network/etc.), do NOT attempt insert/upsert.
       if (selectError) {
         console.error("Profile lookup failed:", selectError);
         return;
       }
 
+      // Create if missing (upsert is safest; requires user_id unique or PK)
       if (!existing) {
-        const { error: insertError } = await supabase
+        const { error: upsertError } = await supabase
           .from("pregnancy_profiles")
-          .insert({ user_id: user.id });
+          .upsert({ user_id: user.id }, { onConflict: "user_id" });
 
         if (cancelled) return;
 
-        // 23505 = unique violation (safe to ignore if profile was created elsewhere concurrently)
-        if (insertError && insertError.code !== "23505") {
-          console.error("Profile creation failed:", insertError);
+        if (upsertError) {
+          console.error("Profile upsert failed:", upsertError);
         }
       }
     }
@@ -66,7 +71,7 @@ function RequireAuth({ children }: { children: JSX.Element }) {
     };
   }, [user, authLoading]);
 
-  // 2. Authentication and Onboarding Redirect Logic
+  // Authentication and Onboarding Redirect Logic
   useEffect(() => {
     if (authLoading) return;
 
