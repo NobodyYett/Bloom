@@ -15,37 +15,55 @@ import Appointments from "@/pages/appointments";
 import Settings from "@/pages/settings";
 
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
-import { usePregnancyState } from "@/hooks/usePregnancyState"; 
-import { supabase } from "./lib/supabase"; 
+import { usePregnancyState } from "@/hooks/usePregnancyState";
+import { supabase } from "./lib/supabase";
 
 // Simple auth gate that works with wouter
 function RequireAuth({ children }: { children: JSX.Element }) {
-  const { user, loading: authLoading } = useAuth(); 
-  const { isProfileLoading, isOnboardingComplete } = usePregnancyState(); 
+  const { user, loading: authLoading } = useAuth();
+  const { isProfileLoading, isOnboardingComplete } = usePregnancyState();
   const [, navigate] = useLocation();
 
-  // 1. Profile Creation Check/Insert
+  // 1. Profile Creation Check/Insert (hardened)
   useEffect(() => {
-    if (user && !authLoading) {
-      async function ensureProfileExists() {
-        const { data: existing } = await supabase
+    if (!user || authLoading) return;
+
+    let cancelled = false;
+
+    async function ensureProfileExists() {
+      const { data: existing, error: selectError } = await supabase
+        .from("pregnancy_profiles")
+        .select("id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      // If we can't reliably check, do NOT attempt insert (prevents false inserts on RLS/network issues)
+      if (selectError) {
+        console.error("Profile lookup failed:", selectError);
+        return;
+      }
+
+      if (!existing) {
+        const { error: insertError } = await supabase
           .from("pregnancy_profiles")
-          .select("id")
-          .eq("user_id", user.id)
-          .single();
-        
-        if (!existing) {
-          const { error: insertError } = await supabase
-            .from("pregnancy_profiles")
-            .insert({ user_id: user.id });
-            
-          if (insertError && insertError.code !== "23505") {
-            console.error("Profile creation failed:", insertError);
-          }
+          .insert({ user_id: user.id });
+
+        if (cancelled) return;
+
+        // 23505 = unique violation (safe to ignore if profile was created elsewhere concurrently)
+        if (insertError && insertError.code !== "23505") {
+          console.error("Profile creation failed:", insertError);
         }
       }
-      ensureProfileExists();
     }
+
+    ensureProfileExists();
+
+    return () => {
+      cancelled = true;
+    };
   }, [user, authLoading]);
 
   // 2. Authentication and Onboarding Redirect Logic
@@ -56,21 +74,21 @@ function RequireAuth({ children }: { children: JSX.Element }) {
       navigate("/login");
       return;
     }
-    
-    if (isProfileLoading) { 
-      return; 
+
+    if (isProfileLoading) {
+      return;
     }
-    
+
     if (user && !isOnboardingComplete) {
-      localStorage.removeItem("bump_skip_due"); 
+      localStorage.removeItem("bump_skip_due");
       navigate("/onboarding");
-      return; 
+      return;
     }
 
     if (isOnboardingComplete && window.location.pathname === "/onboarding") {
       navigate("/");
     }
-  }, [authLoading, user, isProfileLoading, isOnboardingComplete, navigate]); 
+  }, [authLoading, user, isProfileLoading, isOnboardingComplete, navigate]);
 
   if (authLoading || isProfileLoading) {
     return (
@@ -99,7 +117,7 @@ function Router() {
           </RequireAuth>
         )}
       </Route>
-      
+
       <Route path="/appointments">
         {() => (
           <RequireAuth>
