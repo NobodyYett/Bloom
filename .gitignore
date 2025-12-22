@@ -1,13 +1,14 @@
-cat > .gitignore << 'EOF'
 node_modules
 dist
 .DS_Store
+__MACOSX
 server/public
-vite.config.ts.*
-*.tar.gz
+
 .env
 .env.local
-EOF
-# Env files anywhere
+.env.*.local
 **/.env
 **/.env.local
+**/.env.*.local
+
+*.tar.gz
