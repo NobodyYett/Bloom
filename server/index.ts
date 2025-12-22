@@ -1,8 +1,8 @@
 // server/index.ts (FINAL, FIXED VERSION)
-
+//
 // NOTE: dotenv is now loaded via the "dev" script in package.json.
 // Removed: import { config } from 'dotenv';
-// Removed: config({ path: '.env.local' }); 
+// Removed: config({ path: '.env.local' });
 
 import express, { type Request, Response, NextFunction } from "express";
 import { serveStatic } from "./static";
@@ -69,6 +69,12 @@ app.use((req, res, next) => {
   const { registerRoutes } = await import("./routes");
   await registerRoutes(httpServer, app);
 
+  // ✅ Return JSON 404 for any unknown /api routes
+  // This prevents Vite/SPA fallback from serving index.html for missing API endpoints.
+  app.use("/api", (_req, res) => {
+    res.status(404).json({ message: "Not found" });
+  });
+
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
@@ -85,15 +91,15 @@ app.use((req, res, next) => {
   }
 
   const port = parseInt(process.env.PORT || "5000", 10);
-  
+
   // FIXED LISTEN BLOCK (Resolves ENOTSUP error)
   httpServer.listen(
     {
       port,
-      host: "0.0.0.0", // FIX: Changed from "0.0.0.0"
+      host: "0.0.0.0",
     },
     () => {
-      log(`serving on http://localhost:${port}`); 
+      log(`serving on http://localhost:${port}`);
     },
   );
 })();
