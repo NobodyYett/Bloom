@@ -1,29 +1,18 @@
+// vite.config.ts
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
-import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
-import { metaImagesPlugin } from "./vite-plugin-meta-images";
 
 export default defineConfig({
+  // ✅ Load .env from project root (same folder as this config)
+  envDir: import.meta.dirname,
+
+  // ✅ Needed for Capacitor builds
   base: "./",
-  plugins: [
-    react(),
-    runtimeErrorOverlay(),
-    tailwindcss(),
-    metaImagesPlugin(),
-    ...(process.env.NODE_ENV !== "production" &&
-    process.env.REPL_ID !== undefined
-      ? [
-          await import("@replit/vite-plugin-cartographer").then((m) =>
-            m.cartographer(),
-          ),
-          await import("@replit/vite-plugin-dev-banner").then((m) =>
-            m.devBanner(),
-          ),
-        ]
-      : []),
-  ],
+
+  plugins: [react(), tailwindcss()],
+
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "client", "src"),
@@ -31,17 +20,21 @@ export default defineConfig({
       "@assets": path.resolve(import.meta.dirname, "attached_assets"),
     },
   },
+
   css: {
     postcss: {
       plugins: [],
     },
   },
+
+  // ✅ Vite app lives in /client
   root: path.resolve(import.meta.dirname, "client"),
+
   build: {
+    // ✅ Output to dist/public so Capacitor sync picks it up cleanly
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
 
-    // 🔹 NEW: smarter chunking
     rollupOptions: {
       output: {
         manualChunks: {
@@ -80,9 +73,9 @@ export default defineConfig({
       },
     },
 
-    // 🔹 NEW: chill out the warning threshold (in kB)
     chunkSizeWarningLimit: 2000,
   },
+
   server: {
     host: "0.0.0.0",
     allowedHosts: true,

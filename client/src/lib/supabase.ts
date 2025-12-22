@@ -1,32 +1,32 @@
-// client/src/lib/supabase.ts (FINAL NODE-TOLERANT VERSION)
-
 import { createClient } from "@supabase/supabase-js";
 
-/**
- * Safely retrieves environment variables, checking both Node.js (process.env) 
- * and Vite (import.meta.env) environments.
- */
 function getEnv(key: string): string {
-    // Check for Node.js environment (used by the server/tsx)
-    if (typeof process !== 'undefined' && process.env) {
-        // Look for the key defined in .env.local
-        return process.env[key] || '';
-    }
-    
-    // Check for Vite/Browser environment
-    if (typeof import.meta !== 'undefined' && import.meta.env) {
-        // Access the key provided by Vite
-        return (import.meta.env as Record<string, string>)[key] || '';
-    }
+  // Try Vite first (this is the correct source for client-side)
+  const viteVal =
+    (typeof import.meta !== "undefined" &&
+      (import.meta as any).env &&
+      (import.meta as any).env[key]) ||
+    "";
 
-    return ''; 
+  // Try Node second (only relevant for true Node runtime)
+  const nodeVal =
+    (typeof process !== "undefined" &&
+      (process as any).env &&
+      (process as any).env[key]) ||
+    "";
+
+  return viteVal || nodeVal || "";
 }
 
-const supabaseUrl = getEnv('VITE_SUPABASE_URL');
-const supabaseAnonKey = getEnv('VITE_SUPABASE_ANON_KEY');
+const supabaseUrl = getEnv("VITE_SUPABASE_URL");
+const supabaseAnonKey = getEnv("VITE_SUPABASE_ANON_KEY");
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error("Supabase client environment variables are missing! Check your .env.local file.");
+  console.error(
+    "Supabase env vars missing. Need VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY available to the client at build time."
+  );
+  // Hard fail so you don't get a vague runtime crash later
+  throw new Error("Supabase env vars missing");
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);

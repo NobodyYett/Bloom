@@ -18,6 +18,46 @@ import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { usePregnancyState } from "@/hooks/usePregnancyState";
 import { supabase } from "./lib/supabase";
 
+// Auth callback handler - processes OAuth tokens from URL
+function AuthCallback() {
+  const [, navigate] = useLocation();
+  
+  useEffect(() => {
+    async function handleAuthCallback() {
+      // Get the full URL including hash fragment (where tokens live)
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const queryParams = new URLSearchParams(window.location.search);
+      
+      // Check for tokens in hash (implicit flow) or query (PKCE flow)
+      const accessToken = hashParams.get("access_token") || queryParams.get("access_token");
+      const refreshToken = hashParams.get("refresh_token") || queryParams.get("refresh_token");
+      
+      if (accessToken) {
+        // Manually set the session if tokens are present
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken || "",
+        });
+        
+        if (error) {
+          console.error("Error setting session:", error);
+        }
+      }
+      
+      // Redirect to home regardless - auth state listener will handle the rest
+      navigate("/", { replace: true });
+    }
+    
+    handleAuthCallback();
+  }, [navigate]);
+  
+  return (
+    <div className="min-h-screen flex items-center justify-center text-muted-foreground">
+      Completing sign in...
+    </div>
+  );
+}
+
 // Simple auth gate that works with wouter
 function RequireAuth({ children }: { children: JSX.Element }) {
   const { user, loading: authLoading } = useAuth();
@@ -114,6 +154,9 @@ function Router() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
+      
+      {/* OAuth callback - handles redirect from auth providers */}
+      <Route path="/auth/callback" component={AuthCallback} />
 
       <Route path="/onboarding">
         {() => (
