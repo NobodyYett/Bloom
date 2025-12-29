@@ -1,4 +1,3 @@
-cat > .gitignore <<'EOF'
 # build artifacts
 node_modules/
 dist/
@@ -25,6 +24,17 @@ android/.idea/
 .idea/
 *.iml
 
+# Android build/cache
+android/.gradle/
+android/**/build/
+
+# iOS build/cache/user files
+ios/App/Pods/
+ios/App/build/
+ios/App/DerivedData/
+ios/**/xcuserdata/
+ios/**/xcshareddata/WorkspaceSettings.xcsettings
+
 # Finder duplicate merges (common patterns)
 * 2.*
 * 3.*
@@ -36,4 +46,3 @@ android/.idea/
 # Duplicate xmls that should never be committed
 ios/**/config*.xml
 android/**/config*.xml
-EOF
