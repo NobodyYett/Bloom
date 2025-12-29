@@ -121,7 +121,7 @@ export default function Home() {
                       value={tempName}
                       onChange={(e) => setTempName(e.target.value)}
                       placeholder="Type baby's name or leave blank"
-                      className="bg-white/80"
+                      className="bg-white/80 text-black"
                     />
                     <div className="flex gap-2">
                       <Button size="sm" onClick={handleSaveName}>

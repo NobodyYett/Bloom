@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/lib/supabase"; 
-import { useAuth } from "@/hooks/useAuth"; 
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/hooks/useAuth";
 
 // --- Helper Functions ---
 function calculateDueFromLmp(lmp: string): string | null {
@@ -32,6 +32,11 @@ function formatForInput(date: Date | null): string {
   return `${year}-${month}-${day}`;
 }
 
+function isValidDateString(d: string): boolean {
+  const dt = new Date(d);
+  return !Number.isNaN(dt.getTime());
+}
+
 export default function Onboarding() {
   const {
     dueDate,
@@ -40,62 +45,57 @@ export default function Onboarding() {
     setBabyName,
     babySex,
     setBabySex,
-    setIsOnboardingComplete, 
-    refetch, 
-  } = usePregnancyState(); 
+    setIsOnboardingComplete,
+    refetch,
+  } = usePregnancyState();
 
   const { user } = useAuth();
   const { toast } = useToast();
 
-  // Steps: 
+  // Steps:
   // 1 = Welcome + "Do you know your due date?"
-  // 2a = Enter due date (if yes)
-  // 2b = Calculate from LMP (if no but wants help)
-  // 3 = Baby details (name, sex) - only if they have a due date
-  // 4 = Final confirmation
+  // 2 = Enter due date (if yes)
+  // 2.1 = Calculate from LMP
+  // 2.5 = Offer calculation
+  // 3 = Baby details
   const [step, setStep] = useState(1);
-  const [dueInput, setDueInput] = useState<string>(formatForInput(dueDate)); 
+  const [dueInput, setDueInput] = useState<string>(formatForInput(dueDate));
   const [lmpInput, setLmpInput] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
   const [confirmedDueDate, setConfirmedDueDate] = useState<Date | null>(null);
 
   function goToHome() {
-    window.location.href = "/"; 
+    window.location.href = "/";
+  }
+
+  function toYyyyMmDd(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
   }
 
   async function saveAndComplete(
     finalDate: Date | null,
-    currentBabyName: string | null = null, 
-    currentBabySex: "boy" | "girl" | "unknown" = "unknown"
+    currentBabyName: string | null = null,
+    currentBabySex: "boy" | "girl" | "unknown" = "unknown",
   ) {
     if (!user) return;
     setIsSaving(true);
-    
-    const payload: { 
-      due_date?: string | null; 
-      onboarding_complete: boolean;
-      baby_name: string | null;
-      baby_sex: string;
-    } = {
-        onboarding_complete: true,
-        baby_name: currentBabyName, 
-        baby_sex: currentBabySex,
+
+    const payload = {
+      user_id: user.id, // ✅ REQUIRED FOR UPSERT
+      onboarding_complete: true,
+      baby_name: currentBabyName ?? null,
+      baby_sex: currentBabySex,
+      due_date: finalDate ? toYyyyMmDd(finalDate) : null,
     };
 
-    if (finalDate) {
-        const year = finalDate.getFullYear();
-        const month = String(finalDate.getMonth() + 1).padStart(2, "0");
-        const day = String(finalDate.getDate()).padStart(2, "0");
-        payload.due_date = `${year}-${month}-${day}`; 
-    } else {
-        payload.due_date = null;
-    }
-    
+    // ✅ FIX: use upsert so first-time users don’t “save nothing”
     const { error } = await supabase
       .from("pregnancy_profiles")
-      .update(payload)
-      .eq("user_id", user.id);
-      
+      .upsert(payload, { onConflict: "user_id" });
+
     setIsSaving(false);
 
     if (error) {
@@ -108,36 +108,36 @@ export default function Onboarding() {
       return;
     }
 
-    setIsOnboardingComplete(true); 
-    
+    setIsOnboardingComplete(true);
+
     if (refetch) {
       refetch();
     }
-    
+
     goToHome();
   }
 
-  // Step 1: User knows due date -> go to step 2a
+  // Step 1: User knows due date -> go to step 2
   function handleYesKnowDueDate() {
     setStep(2);
   }
 
-  // Step 1: User doesn't know due date -> ask if they want to calculate
+  // Step 1: User doesn't know due date -> offer calculation
   function handleNoKnowDueDate() {
-    setStep(2.5); // Intermediate step: offer calculation
+    setStep(2.5);
   }
 
   // Step 2.5: User wants to calculate from LMP
   function handleWantToCalculate() {
-    setStep(2.1); // Go to LMP input
+    setStep(2.1);
   }
 
-  // Step 2.5: User doesn't want to calculate -> skip to home
+  // Step 2.5: User doesn't want to calculate -> skip
   async function handleSkipEverything() {
     await saveAndComplete(null, null, "unknown");
   }
 
-  // Step 2a: User entered due date -> validate and go to baby details
+  // Step 2: User entered due date -> validate and go to baby details
   function handleDueDateContinue() {
     if (!dueInput) {
       toast({
@@ -146,9 +146,8 @@ export default function Onboarding() {
       });
       return;
     }
-    
-    const finalDate = new Date(dueInput);
-    if (Number.isNaN(finalDate.getTime())) {
+
+    if (!isValidDateString(dueInput)) {
       toast({
         title: "Invalid date",
         description: "Please choose a valid due date.",
@@ -156,13 +155,14 @@ export default function Onboarding() {
       });
       return;
     }
-    
+
+    const finalDate = new Date(dueInput);
     setConfirmedDueDate(finalDate);
     setDueDate(finalDate);
-    setStep(3); // Go to baby details
+    setStep(3);
   }
 
-  // Step 2b: User entered LMP -> calculate and go to baby details
+  // Step 2.1: User entered LMP -> calculate and go to baby details
   function handleLmpContinue() {
     if (!lmpInput) {
       toast({
@@ -186,7 +186,7 @@ export default function Onboarding() {
     setConfirmedDueDate(finalDate);
     setDueDate(finalDate);
     setDueInput(calculated);
-    setStep(3); // Go to baby details
+    setStep(3);
   }
 
   // Step 3: Final save with all details
@@ -197,8 +197,7 @@ export default function Onboarding() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-muted px-4">
       <div className="w-full max-w-md rounded-2xl border bg-card/80 backdrop-blur p-8 shadow-lg space-y-6">
-        
-        {/* STEP 1: Welcome + Do you know your due date? */}
+        {/* STEP 1 */}
         {step === 1 && (
           <>
             <div className="text-center space-y-3">
@@ -209,23 +208,18 @@ export default function Onboarding() {
                 Bump Planner
               </h1>
               <p className="text-sm text-muted-foreground">
-                Thank you for joining! We're excited to be part of your pregnancy journey.
+                Thank you for joining! We&apos;re excited to be part of your pregnancy journey.
               </p>
             </div>
 
             <div className="pt-4 space-y-4">
-              <p className="text-center font-medium">
-                Do you know your due date?
-              </p>
+              <p className="text-center font-medium">Do you know your due date?</p>
               <div className="flex gap-3">
-                <Button 
-                  className="flex-1" 
-                  onClick={handleYesKnowDueDate}
-                >
+                <Button className="flex-1" onClick={handleYesKnowDueDate}>
                   Yes, I do
                 </Button>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   className="flex-1"
                   onClick={handleNoKnowDueDate}
                 >
@@ -236,27 +230,22 @@ export default function Onboarding() {
           </>
         )}
 
-        {/* STEP 2.5: Offer to calculate */}
+        {/* STEP 2.5 */}
         {step === 2.5 && (
           <>
             <div className="text-center space-y-3">
-              <h2 className="text-2xl font-serif font-semibold">
-                No problem!
-              </h2>
+              <h2 className="text-2xl font-serif font-semibold">No problem!</h2>
               <p className="text-sm text-muted-foreground">
                 Would you like us to help estimate your due date based on your last menstrual period?
               </p>
             </div>
 
             <div className="pt-4 space-y-3">
-              <Button 
-                className="w-full" 
-                onClick={handleWantToCalculate}
-              >
+              <Button className="w-full" onClick={handleWantToCalculate}>
                 Yes, help me calculate
               </Button>
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 className="w-full text-sm"
                 onClick={handleSkipEverything}
                 disabled={isSaving}
@@ -267,7 +256,7 @@ export default function Onboarding() {
           </>
         )}
 
-        {/* STEP 2a: Enter due date */}
+        {/* STEP 2 */}
         {step === 2 && (
           <>
             <div className="text-center space-y-2">
@@ -275,7 +264,7 @@ export default function Onboarding() {
                 When is your due date?
               </h2>
               <p className="text-sm text-muted-foreground">
-                Don't worry if it's not exact — you can update it anytime.
+                Don&apos;t worry if it&apos;s not exact — you can update it anytime.
               </p>
             </div>
 
@@ -289,34 +278,25 @@ export default function Onboarding() {
                   onChange={(e) => setDueInput(e.target.value)}
                 />
               </div>
-              
-              <Button 
-                className="w-full" 
-                onClick={handleDueDateContinue}
-              >
+
+              <Button className="w-full" onClick={handleDueDateContinue}>
                 Continue
               </Button>
-              
-              <Button 
-                variant="ghost" 
-                className="w-full text-xs"
-                onClick={() => setStep(1)}
-              >
+
+              <Button variant="ghost" className="w-full text-xs" onClick={() => setStep(1)}>
                 Back
               </Button>
             </div>
           </>
         )}
 
-        {/* STEP 2.1: Calculate from LMP */}
+        {/* STEP 2.1 */}
         {step === 2.1 && (
           <>
             <div className="text-center space-y-2">
-              <h2 className="text-2xl font-serif font-semibold">
-                Let's calculate it
-              </h2>
+              <h2 className="text-2xl font-serif font-semibold">Let&apos;s calculate it</h2>
               <p className="text-sm text-muted-foreground">
-                Enter the first day of your last menstrual period and we'll estimate your due date.
+                Enter the first day of your last menstrual period and we&apos;ll estimate your due date.
               </p>
             </div>
 
@@ -330,19 +310,16 @@ export default function Onboarding() {
                   onChange={(e) => setLmpInput(e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  We'll add 280 days (40 weeks) to estimate your due date.
+                  We&apos;ll add 280 days (40 weeks) to estimate your due date.
                 </p>
               </div>
-              
-              <Button 
-                className="w-full" 
-                onClick={handleLmpContinue}
-              >
+
+              <Button className="w-full" onClick={handleLmpContinue}>
                 Calculate & Continue
               </Button>
-              
-              <Button 
-                variant="ghost" 
+
+              <Button
+                variant="ghost"
                 className="w-full text-xs"
                 onClick={() => setStep(2.5)}
               >
@@ -352,13 +329,11 @@ export default function Onboarding() {
           </>
         )}
 
-        {/* STEP 3: Baby details */}
+        {/* STEP 3 */}
         {step === 3 && (
           <>
             <div className="text-center space-y-2">
-              <h2 className="text-2xl font-serif font-semibold">
-                A few more details
-              </h2>
+              <h2 className="text-2xl font-serif font-semibold">A few more details</h2>
               <p className="text-sm text-muted-foreground">
                 These are optional — feel free to skip or update later.
               </p>
@@ -366,7 +341,7 @@ export default function Onboarding() {
 
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="babyName">Baby's nickname (optional)</Label>
+                <Label htmlFor="babyName">Baby&apos;s nickname (optional)</Label>
                 <Input
                   id="babyName"
                   type="text"
@@ -390,7 +365,9 @@ export default function Onboarding() {
                       type="button"
                       variant={babySex === opt.value ? "default" : "outline"}
                       className="flex-1"
-                      onClick={() => setBabySex(opt.value as "boy" | "girl" | "unknown")}
+                      onClick={() =>
+                        setBabySex(opt.value as "boy" | "girl" | "unknown")
+                      }
                       disabled={isSaving}
                     >
                       {opt.label}
@@ -402,17 +379,17 @@ export default function Onboarding() {
               <div className="bg-muted/50 rounded-lg p-3 text-sm text-muted-foreground">
                 💡 You can add appointments later from the Appointments tab.
               </div>
-              
-              <Button 
-                className="w-full" 
+
+              <Button
+                className="w-full"
                 onClick={handleFinalContinue}
                 disabled={isSaving}
               >
                 {isSaving ? "Finishing up..." : "Let's get started!"}
               </Button>
-              
-              <Button 
-                variant="ghost" 
+
+              <Button
+                variant="ghost"
                 className="w-full text-xs"
                 onClick={() => setStep(2)}
                 disabled={isSaving}

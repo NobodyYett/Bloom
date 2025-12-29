@@ -84,6 +84,17 @@ export default defineConfig({
   server: {
     host: "0.0.0.0",
     allowedHosts: true,
+
+    // ✅ IMPORTANT: forward /api/* to your Express server in dev
+    // Run the server with: npm run start:5001
+    proxy: {
+      "/api": {
+        target: "http://localhost:5001",
+        changeOrigin: true,
+        secure: false,
+      },
+    },
+
     fs: {
       strict: true,
       deny: ["**/.*"],

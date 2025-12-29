@@ -8,7 +8,10 @@
 // ✅ Trusts proxy headers (important on Render / reverse proxies)
 // ✅ Graceful shutdown for SIGTERM (Render sends this on deploys)
 
-import express, { type Request, Response, type NextFunction } from "express";
+// ✅ IMPORTANT: load .env for the server process
+import "dotenv/config";
+
+import express, { type Request, type Response, type NextFunction } from "express";
 import { createServer } from "http";
 import { serveStatic } from "./static";
 
@@ -20,7 +23,7 @@ app.set("trust proxy", 1);
 
 declare module "http" {
   interface IncomingMessage {
-    rawBody: unknown;
+    rawBody?: Buffer;
   }
 }
 
@@ -52,7 +55,7 @@ app.use((req, res, next) => {
   let capturedJsonResponse: Record<string, any> | undefined;
 
   const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
+  res.json = function (bodyJson: any, ...args: any[]) {
     capturedJsonResponse = bodyJson;
     return originalResJson.apply(res, [bodyJson, ...args]);
   };
@@ -106,12 +109,9 @@ function startListening(initialPort: number) {
       process.exit(1);
     };
 
-    // attach the listener first
     httpServer.once("error", onError);
 
-    // then attempt listening
     httpServer.listen({ port, host }, () => {
-      // if we successfully started, remove the pending error handler
       httpServer.off("error", onError);
 
       log(
@@ -133,7 +133,6 @@ function setupGracefulShutdown() {
       process.exit(0);
     });
 
-    // Force close if something hangs
     setTimeout(() => {
       console.error("Force exiting after 10s shutdown timeout.");
       process.exit(1);
@@ -145,7 +144,7 @@ function setupGracefulShutdown() {
 }
 
 (async () => {
-  // Dynamic import AFTER dotenv has loaded (per your setup)
+  // Import routes AFTER dotenv/config has run
   const { registerRoutes } = await import("./routes");
   await registerRoutes(httpServer, app);
 
@@ -173,7 +172,7 @@ function setupGracefulShutdown() {
   }
 
   setupGracefulShutdown();
- 
+
   // ✅ Render provides PORT; locally you prefer 5001
   const port = Number(process.env.PORT) || 5001;
   startListening(port);

@@ -8,7 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { Calendar as CalendarIcon, MapPin, Clock, Trash2, Plus } from "lucide-react";
+import {
+  Calendar as CalendarIcon,
+  MapPin,
+  Clock,
+  Trash2,
+  Plus,
+} from "lucide-react";
 
 type Appointment = {
   id: string;
@@ -18,32 +24,37 @@ type Appointment = {
   notes: string | null;
 };
 
-export default function Appointments() {
-  const { dueDate, setDueDate } = usePregnancyState();
+export default function AppointmentsPage() {
   const { user } = useAuth();
+  const { dueDate, setDueDate } = usePregnancyState();
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  // form state
   const [title, setTitle] = useState("");
   const [startsAt, setStartsAt] = useState("");
   const [location, setLocation] = useState("");
   const [notes, setNotes] = useState("");
 
-  // load all appointments for this user
-  useEffect(() => {
-    if (!user) return;
+  const [loading, setLoading] = useState(false);
+  const [isSaving, setSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  useEffect(() => {
     async function load() {
+      if (!user) {
+        // user logged out; clear any cached UI data
+        setAppointments([]);
+        setErrorMsg(null);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       setErrorMsg(null);
 
       const { data, error } = await supabase
         .from("pregnancy_appointments")
         .select("id, title, starts_at, location, notes")
+        .eq("user_id", user.id) // ✅ SAFETY: only this user's rows
         .order("starts_at", { ascending: true });
 
       setLoading(false);
@@ -72,7 +83,7 @@ export default function Appointments() {
     setSaving(true);
     setErrorMsg(null);
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("pregnancy_appointments")
       .insert([
         {
@@ -83,27 +94,30 @@ export default function Appointments() {
           notes: notes.trim() || null,
         },
       ])
-      .select("id, title, starts_at, location, notes")
-      .single();
+      .select("id, title, starts_at, location, notes");
 
     setSaving(false);
 
     if (error) {
       console.error(error);
-      setErrorMsg("Couldn’t save this appointment. Please try again.");
+      setErrorMsg("Couldn’t save your appointment. Please try again.");
       return;
     }
 
-    if (data) {
-      setAppointments((prev) =>
-        [...prev, data as Appointment].sort(
-          (a, b) =>
-            new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime()
-        )
-      );
+    // Reload list (simple + consistent)
+    const { data: refreshed, error: refreshError } = await supabase
+      .from("pregnancy_appointments")
+      .select("id, title, starts_at, location, notes")
+      .eq("user_id", user.id) // ✅ SAFETY
+      .order("starts_at", { ascending: true });
+
+    if (refreshError) {
+      console.error(refreshError);
+      setErrorMsg("Saved, but couldn’t refresh the list.");
+      return;
     }
 
-    // reset form
+    setAppointments((refreshed || []) as Appointment[]);
     setTitle("");
     setStartsAt("");
     setLocation("");
@@ -111,12 +125,14 @@ export default function Appointments() {
   }
 
   async function handleDelete(id: string) {
+    if (!user) return;
     if (!window.confirm("Remove this appointment?")) return;
 
     const { error } = await supabase
       .from("pregnancy_appointments")
       .delete()
-      .eq("id", id);
+      .eq("id", id)
+      .eq("user_id", user.id); // ✅ SAFETY: only delete your own
 
     if (error) {
       console.error(error);
@@ -128,197 +144,185 @@ export default function Appointments() {
   }
 
   const upcoming = appointments.filter(
-    (a) => new Date(a.starts_at).getTime() >= Date.now()
+    (a) => new Date(a.starts_at).getTime() >= Date.now(),
   );
   const past = appointments.filter(
-    (a) => new Date(a.starts_at).getTime() < Date.now()
+    (a) => new Date(a.starts_at).getTime() < Date.now(),
   );
 
   return (
     <Layout dueDate={dueDate} setDueDate={setDueDate}>
-      <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-        {/* header */}
-        <section>
-          <h1 className="font-serif text-3xl md:text-4xl font-bold mb-2">
+      <div className="max-w-3xl mx-auto space-y-8 pb-10">
+        <header className="space-y-2">
+          <h1 className="font-serif text-3xl font-bold tracking-tight">
             Appointments
           </h1>
-          <p className="text-sm text-muted-foreground max-w-xl">
-            Keep track of upcoming prenatal visits, ultrasounds, and anything
-            else you don’t want to miss.
+          <p className="text-muted-foreground">
+            Keep track of your prenatal visits and important check-ins.
           </p>
-        </section>
+        </header>
 
-        {/* main grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* list column */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="flex items-center gap-2">
-              <CalendarIcon className="w-5 h-5 text-primary" />
-              <h2 className="font-semibold text-sm tracking-wide uppercase text-muted-foreground">
-                Upcoming
-              </h2>
+        <section className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+          <div className="bg-muted/30 px-6 py-4 border-b border-border flex items-center gap-2">
+            <CalendarIcon className="h-5 w-5" />
+            <div>
+              <h2 className="text-lg font-semibold">Add appointment</h2>
+              <p className="text-sm text-muted-foreground">
+                Add upcoming dates and notes for your visits.
+              </p>
+            </div>
+          </div>
+
+          <form onSubmit={handleAdd} className="p-6 grid gap-4">
+            {errorMsg && (
+              <div className="text-sm text-destructive">{errorMsg}</div>
+            )}
+
+            <div className="grid gap-2">
+              <label className="text-sm font-medium">Title</label>
+              <Input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="e.g. Ultrasound"
+              />
             </div>
 
-            <div className="space-y-3">
-              {loading && (
-                <p className="text-sm text-muted-foreground">
-                  Loading your appointments…
-                </p>
-              )}
+            <div className="grid gap-2">
+              <label className="text-sm font-medium">Date & time</label>
+              <Input
+                type="datetime-local"
+                value={startsAt}
+                onChange={(e) => setStartsAt(e.target.value)}
+              />
+            </div>
 
-              {!loading && upcoming.length === 0 && (
-                <p className="text-sm text-muted-foreground">
-                  No upcoming appointments yet. When you add one, it will also
-                  appear under <span className="font-medium">Current Progress</span> on
-                  your Today page.
-                </p>
-              )}
+            <div className="grid gap-2">
+              <label className="text-sm font-medium flex items-center gap-2">
+                <MapPin className="h-4 w-4" /> Location (optional)
+              </label>
+              <Input
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="Clinic / hospital"
+              />
+            </div>
 
-              {upcoming.map((appt) => (
+            <div className="grid gap-2">
+              <label className="text-sm font-medium">Notes (optional)</label>
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Questions to ask, what to bring, etc."
+              />
+            </div>
+
+            <div className="flex justify-end">
+              <Button type="submit" disabled={isSaving}>
+                <Plus className="mr-2 h-4 w-4" />
+                {isSaving ? "Saving..." : "Add"}
+              </Button>
+            </div>
+          </form>
+        </section>
+
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <Clock className="h-5 w-5" />
+            Upcoming
+          </h2>
+
+          {loading ? (
+            <div className="text-sm text-muted-foreground">Loading...</div>
+          ) : upcoming.length === 0 ? (
+            <div className="text-sm text-muted-foreground">
+              No upcoming appointments.
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              {upcoming.map((a) => (
                 <div
-                  key={appt.id}
-                  className="flex items-start gap-3 rounded-xl border border-border bg-card px-4 py-3"
+                  key={a.id}
+                  className={cn(
+                    "bg-card border border-border rounded-xl p-4 flex items-start justify-between gap-4",
+                  )}
                 >
-                  <div className="mt-1">
-                    <Clock className="w-4 h-4 text-primary" />
-                  </div>
-                  <div className="flex-1 space-y-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="font-medium text-sm">
-                        {appt.title}
-                      </p>
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">
-                        {format(new Date(appt.starts_at), "EEE, MMM d • p")}
-                      </span>
+                  <div className="space-y-1">
+                    <div className="font-medium">{a.title}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {format(new Date(a.starts_at), "PPP 'at' p")}
                     </div>
-
-                    {appt.location && (
-                      <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        <MapPin className="w-3 h-3" />
-                        {appt.location}
-                      </p>
+                    {a.location && (
+                      <div className="text-sm text-muted-foreground">
+                        {a.location}
+                      </div>
                     )}
-
-                    {appt.notes && (
-                      <p className="text-xs text-muted-foreground">
-                        {appt.notes}
-                      </p>
+                    {a.notes && (
+                      <div className="text-sm text-muted-foreground">
+                        {a.notes}
+                      </div>
                     )}
                   </div>
-                  <button
-                    onClick={() => handleDelete(appt.id)}
-                    className="ml-2 text-xs text-muted-foreground hover:text-destructive"
-                    title="Delete appointment"
+
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleDelete(a.id)}
+                    aria-label="Delete appointment"
                   >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
                 </div>
               ))}
             </div>
+          )}
+        </section>
 
-            {past.length > 0 && (
-              <div className="space-y-3 pt-4 border-t border-border/60">
-                <h2 className="font-semibold text-sm tracking-wide uppercase text-muted-foreground">
-                  Past
-                </h2>
-                <div className="space-y-2">
-                  {past.map((appt) => (
-                    <div
-                      key={appt.id}
-                      className="flex items-start justify-between gap-3 rounded-xl border border-border/60 bg-muted/40 px-4 py-3"
-                    >
-                      <div className="flex-1 space-y-1">
-                        <p className="font-medium text-sm">{appt.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {format(new Date(appt.starts_at), "EEE, MMM d • p")}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => handleDelete(appt.id)}
-                        className="text-xs text-muted-foreground hover:text-destructive"
-                        title="Delete appointment"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold">Past</h2>
 
-          {/* form column */}
-          <div className="space-y-4 lg:sticky lg:top-8 h-fit">
-            <div className="flex items-center gap-2">
-              <Plus className="w-4 h-4 text-primary" />
-              <h2 className="font-semibold text-sm tracking-wide uppercase text-muted-foreground">
-                Add appointment
-              </h2>
+          {loading ? (
+            <div className="text-sm text-muted-foreground">Loading...</div>
+          ) : past.length === 0 ? (
+            <div className="text-sm text-muted-foreground">
+              No past appointments.
             </div>
+          ) : (
+            <div className="grid gap-3">
+              {past.map((a) => (
+                <div
+                  key={a.id}
+                  className="bg-card border border-border rounded-xl p-4 flex items-start justify-between gap-4 opacity-90"
+                >
+                  <div className="space-y-1">
+                    <div className="font-medium">{a.title}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {format(new Date(a.starts_at), "PPP 'at' p")}
+                    </div>
+                    {a.location && (
+                      <div className="text-sm text-muted-foreground">
+                        {a.location}
+                      </div>
+                    )}
+                    {a.notes && (
+                      <div className="text-sm text-muted-foreground">
+                        {a.notes}
+                      </div>
+                    )}
+                  </div>
 
-            <form
-              onSubmit={handleAdd}
-              className="space-y-3 rounded-2xl border border-border bg-card p-4"
-            >
-              {errorMsg && (
-                <p className="text-xs text-destructive mb-1">{errorMsg}</p>
-              )}
-
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">
-                  Title
-                </label>
-                <Input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Anatomy scan, OB visit…"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">
-                  Date & time
-                </label>
-                <Input
-                  type="datetime-local"
-                  value={startsAt}
-                  onChange={(e) => setStartsAt(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">
-                  Location (optional)
-                </label>
-                <Input
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  placeholder="Hospital, clinic, virtual, etc."
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-medium text-muted-foreground">
-                  Notes (optional)
-                </label>
-                <Textarea
-                  rows={3}
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Questions to ask, things to remember…"
-                />
-              </div>
-
-              <Button
-                type="submit"
-                className={cn("w-full mt-2")}
-                disabled={saving}
-              >
-                {saving ? "Saving…" : "Save appointment"}
-              </Button>
-            </form>
-          </div>
-        </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleDelete(a.id)}
+                    aria-label="Delete appointment"
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </Layout>
   );

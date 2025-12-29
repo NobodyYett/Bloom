@@ -12,3 +12,26 @@ server/public
 **/.env.*.local
 
 *.tar.gz
+android/local.properties
+__MACOSX/
+# Android Studio / IntelliJ
+android/.idea/
+*.iml
+
+# macOS junk
+.DS_Store
+__MACOSX/
+
+# “duplicate” files/folders created by Finder merges
+* 2*
+* 3*
+* 4*
+
+# Capacitor / Android / iOS local machine files
+android/local.properties
+android/.idea/
+.idea/
+
+# Duplicate xmls that should never be committed
+ios/**/config *.xml
+android/**/config *.xml

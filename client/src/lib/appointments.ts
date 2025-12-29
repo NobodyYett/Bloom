@@ -12,24 +12,38 @@ export interface Appointment {
   updated_at: string;
 }
 
+export type CreateAppointmentInput = {
+  title: string;
+  starts_at: string; // ISO string
+  location?: string | null;
+  notes?: string | null;
+};
+
+export type DeleteAppointmentInput = {
+  id: string;
+  userId: string;
+};
+
 // ---- Queries ----
 
-async function fetchAppointments(): Promise<Appointment[]> {
+async function fetchAppointments(userId: string): Promise<Appointment[]> {
   const { data, error } = await supabase
     .from("pregnancy_appointments")
     .select("*")
+    .eq("user_id", userId) // ✅ SAFETY
     .order("starts_at", { ascending: true });
 
   if (error) throw error;
   return data ?? [];
 }
 
-async function fetchNextAppointment(): Promise<Appointment | null> {
+async function fetchNextAppointment(userId: string): Promise<Appointment | null> {
   const nowIso = new Date().toISOString();
 
   const { data, error } = await supabase
     .from("pregnancy_appointments")
     .select("*")
+    .eq("user_id", userId) // ✅ SAFETY
     .gte("starts_at", nowIso)
     .order("starts_at", { ascending: true })
     .limit(1)
@@ -39,28 +53,23 @@ async function fetchNextAppointment(): Promise<Appointment | null> {
   return data ?? null;
 }
 
-export function useAppointments() {
+export function useAppointments(userId?: string) {
   return useQuery({
-    queryKey: ["appointments"],
-    queryFn: fetchAppointments,
+    queryKey: ["appointments", userId],
+    enabled: !!userId,
+    queryFn: () => fetchAppointments(userId as string),
   });
 }
 
-export function useNextAppointment() {
+export function useNextAppointment(userId?: string) {
   return useQuery({
-    queryKey: ["next-appointment"],
-    queryFn: fetchNextAppointment,
+    queryKey: ["next-appointment", userId],
+    enabled: !!userId,
+    queryFn: () => fetchNextAppointment(userId as string),
   });
 }
 
 // ---- Mutations ----
-
-interface CreateAppointmentInput {
-  title: string;
-  starts_at: string; // ISO
-  location?: string;
-  notes?: string;
-}
 
 export function useCreateAppointment() {
   const queryClient = useQueryClient();
@@ -68,7 +77,8 @@ export function useCreateAppointment() {
   return useMutation({
     mutationFn: async (input: CreateAppointmentInput) => {
       const { data: userData, error: userError } = await supabase.auth.getUser();
-      if (userError || !userData.user) throw userError ?? new Error("Not logged in");
+      if (userError || !userData.user)
+        throw userError ?? new Error("Not logged in");
 
       const { data, error } = await supabase
         .from("pregnancy_appointments")
@@ -79,13 +89,13 @@ export function useCreateAppointment() {
           location: input.location ?? null,
           notes: input.notes ?? null,
         })
-        .select()
+        .select("*")
         .single();
 
       if (error) throw error;
       return data as Appointment;
     },
-    onSuccess: () => {
+    onSuccess: (_created) => {
       queryClient.invalidateQueries({ queryKey: ["appointments"] });
       queryClient.invalidateQueries({ queryKey: ["next-appointment"] });
     },
@@ -96,11 +106,12 @@ export function useDeleteAppointment() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async ({ id, userId }: DeleteAppointmentInput) => {
       const { error } = await supabase
         .from("pregnancy_appointments")
         .delete()
-        .eq("id", id);
+        .eq("id", id)
+        .eq("user_id", userId); // ✅ SAFETY
 
       if (error) throw error;
       return id;
