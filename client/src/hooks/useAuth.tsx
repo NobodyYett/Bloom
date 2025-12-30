@@ -1,4 +1,4 @@
-// client/src/hooks/useAuth.ts (CAPACITOR-SAFE UPDATE)
+// client/src/hooks/useAuth.tsx (FIXED - handles no session gracefully)
 
 import { createContext, useContext, useEffect, useState } from "react";
 import type { User } from "@supabase/supabase-js";
@@ -26,14 +26,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     let mounted = true;
 
     // Check current session on first load
-    supabase.auth.getUser().then(({ data, error }) => {
-      if (!mounted) return;
-      if (error) {
-        console.error("Error loading user", error);
+    // Use getSession() instead of getUser() to avoid errors when no session exists
+    async function initAuth() {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (!mounted) return;
+        
+        if (error) {
+          // Only log actual errors, not "no session" which is expected on login page
+          if (error.message !== "Auth session missing!") {
+            console.error("Error loading session", error);
+          }
+        }
+        
+        setUser(session?.user ?? null);
+      } catch (err) {
+        // Silently handle - user just isn't logged in
+        if (mounted) {
+          setUser(null);
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
       }
-      setUser(data?.user ?? null);
-      setLoading(false);
-    });
+    }
+
+    initAuth();
 
     // Listen for login/logout events
     const { data: subscription } = supabase.auth.onAuthStateChange(
