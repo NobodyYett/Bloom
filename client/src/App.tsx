@@ -6,6 +6,8 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { App as CapApp, URLOpenListenerEvent } from "@capacitor/app";
+import { Capacitor } from "@capacitor/core";
 
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
@@ -19,6 +21,72 @@ import Settings from "@/pages/settings";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { usePregnancyState } from "@/hooks/usePregnancyState";
 import { supabase } from "./lib/supabase";
+
+/**
+ * Deep Link Listener for Capacitor
+ * Captures OAuth redirects when the app reopens via custom URL scheme
+ */
+function DeepLinkListener() {
+  const [, navigate] = useLocation();
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    const handleDeepLink = async (event: URLOpenListenerEvent) => {
+      console.log("Deep link received:", event.url);
+
+      try {
+        const url = new URL(event.url);
+
+        // Check if this is an auth callback
+        if (url.pathname.includes("auth/callback") || url.host === "auth") {
+          const code = url.searchParams.get("code");
+
+          if (code) {
+            const { error } = await supabase.auth.exchangeCodeForSession(event.url);
+            if (error) {
+              console.error("Exchange code error:", error);
+              navigate("/login", { replace: true });
+            } else {
+              navigate("/", { replace: true });
+            }
+          } else {
+            // Try implicit flow
+            const hashParams = new URLSearchParams(url.hash.replace("#", ""));
+            const accessToken = hashParams.get("access_token");
+            const refreshToken = hashParams.get("refresh_token");
+
+            if (accessToken) {
+              const { error } = await supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken || "",
+              });
+              if (error) {
+                console.error("Set session error:", error);
+                navigate("/login", { replace: true });
+              } else {
+                navigate("/", { replace: true });
+              }
+            } else {
+              navigate("/login", { replace: true });
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Deep link error:", err);
+        navigate("/login", { replace: true });
+      }
+    };
+
+    CapApp.addListener("appUrlOpen", handleDeepLink);
+
+    return () => {
+      CapApp.removeAllListeners();
+    };
+  }, [navigate]);
+
+  return null;
+}
 
 /**
  * OAuth callback handler
@@ -229,6 +297,7 @@ export default function App() {
     <AuthProvider>
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
+          <DeepLinkListener />
           <Toaster />
           <Router />
         </TooltipProvider>

@@ -1,61 +1,102 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Apple, Chrome } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Browser } from '@capacitor/browser';
-import { Capacitor } from '@capacitor/core';
+import { Browser } from "@capacitor/browser";
+import { Capacitor } from "@capacitor/core";
+import { useLocation } from "wouter";
 
 export default function Login() {
   const [loadingProvider, setLoadingProvider] = useState<
     null | "google" | "apple"
   >(null);
   const { toast } = useToast();
+  const [, navigate] = useLocation();
 
-async function handleSignIn(provider: "google" | "apple") {
-  try {
-    setLoadingProvider(provider);
+  // Check for existing session when component mounts
+  useEffect(() => {
+    const checkExistingSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        console.log("Existing session found, navigating to home");
+        navigate("/", { replace: true });
+      }
+    };
 
-    // Build the redirect URL based on platform
-    const redirectTo = Capacitor.isNativePlatform()
-      ? "com.bumpplanner.app://auth/callback"
-      : `${window.location.origin}/auth/callback`;
+    checkExistingSession();
 
-    // Get the OAuth URL from Supabase without auto-redirecting
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: {
-        redirectTo,
-        skipBrowserRedirect: true, // Don't auto-redirect, we'll handle it
-      },
+    // Listen for auth state changes (handles return from OAuth)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log("Auth state changed:", event);
+      if (event === "SIGNED_IN" && session) {
+        // Close the browser if it's still open (mobile)
+        if (Capacitor.isNativePlatform()) {
+          Browser.close().catch(() => {
+            // Browser might not be open, that's fine
+          });
+        }
+        navigate("/", { replace: true });
+      }
     });
 
-    if (error) {
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [navigate]);
+
+  async function handleSignIn(provider: "google" | "apple") {
+    try {
+      setLoadingProvider(provider);
+
+      // For Universal Links on iOS, we use the HTTPS URL
+      // iOS will automatically open this in the app due to Associated Domains
+      // For web, we use the current origin
+      const redirectTo = Capacitor.isNativePlatform()
+        ? "https://bump-planner.onrender.com/auth/callback"
+        : `${window.location.origin}/auth/callback`;
+
+      console.log("OAuth redirect URL:", redirectTo);
+
+      // Get the OAuth URL from Supabase without auto-redirecting
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo,
+          skipBrowserRedirect: true,
+        },
+      });
+
+      if (error) {
+        toast({
+          title: "Sign-in failed",
+          description: error.message,
+          variant: "destructive",
+        });
+        setLoadingProvider(null);
+        return;
+      }
+
+      // Open the OAuth URL
+      if (Capacitor.isNativePlatform() && data?.url) {
+        console.log("Opening OAuth URL:", data.url);
+        await Browser.open({ 
+          url: data.url,
+          presentationStyle: "popover",
+        });
+      } else if (data?.url) {
+        // On web, redirect normally
+        window.location.href = data.url;
+      }
+    } catch (err: any) {
+      console.error("Sign-in error:", err);
       toast({
-        title: "Sign-in failed",
-        description: error.message,
-        variant: "destructive",
+        title: "Something went wrong",
+        description: "Please try again.",
       });
       setLoadingProvider(null);
-      return;
     }
-
-    // On mobile, use Capacitor Browser to open the OAuth URL
-    if (Capacitor.isNativePlatform() && data?.url) {
-      await Browser.open({ url: data.url });
-    } else if (data?.url) {
-      // On web, redirect normally
-      window.location.href = data.url;
-    }
-  } catch (err: any) {
-    toast({
-      title: "Something went wrong",
-      description: "Please try again.",
-      variant: "destructive",
-    });
-    setLoadingProvider(null);
   }
-}
 
   return (
     <div className="relative min-h-screen flex items-center justify-center bg-gradient-to-b from-background to-muted px-4 overflow-hidden">

@@ -1,6 +1,5 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8" ?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
     <!-- Android 11+ package visibility (helps OAuth browser launches) -->
     <queries>
         <intent>
@@ -22,7 +21,6 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
-
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -30,7 +28,6 @@
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density">
-
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -43,12 +40,8 @@
                 <category android:name="android.intent.category.BROWSABLE" />
 
                 <!-- Use your custom scheme redirect -->
-                <data
-                    android:scheme="com.bumpplanner.app"
-                    android:host="auth" 
-                    android:pathPrefix="/callback" />
+                <data android:scheme="com.bumpplanner.app" android:host="auth" android:pathPrefix="/callback" />
             </intent-filter>
-
         </activity>
 
         <provider
@@ -56,10 +49,7 @@
             android:authorities="${applicationId}.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/file_paths" />
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
-
     </application>
 </manifest>
