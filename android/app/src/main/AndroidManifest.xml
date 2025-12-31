@@ -33,15 +33,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Deep link for OAuth callback -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
+            <!-- Deep link for OAuth callback (accept any URL under our scheme) -->
+<intent-filter>
+  <action android:name="android.intent.action.VIEW" />
+  <category android:name="android.intent.category.DEFAULT" />
+  <category android:name="android.intent.category.BROWSABLE" />
+  <data android:scheme="com.bumpplanner.app" />
+</intent-filter>
 
-                <!-- Use your custom scheme redirect -->
-                <data android:scheme="com.bumpplanner.app" android:host="auth" android:pathPrefix="/callback" />
-            </intent-filter>
         </activity>
 
         <provider

@@ -1,12 +1,11 @@
-// client/src/App.tsx
-
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { App as CapApp, URLOpenListenerEvent } from "@capacitor/app";
+import { Browser } from "@capacitor/browser";
 import { Capacitor } from "@capacitor/core";
 
 import NotFound from "@/pages/not-found";
@@ -22,59 +21,105 @@ import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { usePregnancyState } from "@/hooks/usePregnancyState";
 import { supabase } from "./lib/supabase";
 
+async function closeSafariBestEffort() {
+  // iOS can ignore close() if the controller is mid-transition.
+  // So we try immediately + once again shortly after.
+  try {
+    await Browser.close();
+  } catch {}
+  setTimeout(() => {
+    Browser.close().catch(() => {});
+  }, 250);
+  setTimeout(() => {
+    Browser.close().catch(() => {});
+  }, 900);
+}
+
 /**
  * Deep Link Listener for Capacitor
- * Captures OAuth redirects when the app reopens via custom URL scheme
+ * Handles OAuth redirects when the app reopens via custom URL scheme.
  */
 function DeepLinkListener() {
   const [, navigate] = useLocation();
+
+  // Prevent duplicate processing (iOS can fire appUrlOpen more than once)
+  const processedUrls = useRef<Set<string>>(new Set());
+  const isHandling = useRef(false);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
 
     const handleDeepLink = async (event: URLOpenListenerEvent) => {
-      console.log("Deep link received:", event.url);
+      const fullUrl = event.url || "";
+      if (!fullUrl) return;
+
+      // Only handle YOUR auth callback
+      if (!fullUrl.startsWith("com.bumpplanner.app://")) return;
+      if (!fullUrl.includes("auth/callback")) return;
+
+      // Hard gate to stop re-entrancy
+      if (isHandling.current) return;
+      if (processedUrls.current.has(fullUrl)) return;
+
+      isHandling.current = true;
+      processedUrls.current.add(fullUrl);
+      setTimeout(() => processedUrls.current.delete(fullUrl), 8000);
 
       try {
-        const url = new URL(event.url);
+        console.log("[appUrlOpen] received:", fullUrl);
 
-        // Check if this is an auth callback
-        if (url.pathname.includes("auth/callback") || url.host === "auth") {
-          const code = url.searchParams.get("code");
+        // Close Safari ASAP (best-effort)
+        await closeSafariBestEffort();
 
-          if (code) {
-            const { error } = await supabase.auth.exchangeCodeForSession(event.url);
-            if (error) {
-              console.error("Exchange code error:", error);
-              navigate("/login", { replace: true });
-            } else {
-              navigate("/", { replace: true });
-            }
+        const url = new URL(fullUrl);
+
+        // Implicit flow: tokens come in hash
+        const hash = url.hash.replace(/^#/, "");
+        const hashParams = new URLSearchParams(hash);
+        const accessToken = hashParams.get("access_token");
+        const refreshToken = hashParams.get("refresh_token");
+
+        if (accessToken) {
+          console.log("[appUrlOpen] setting session with access_token");
+
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken || "",
+          });
+
+          if (error) {
+            console.error("[appUrlOpen] setSession error:", error);
+            navigate("/login", { replace: true });
           } else {
-            // Try implicit flow
-            const hashParams = new URLSearchParams(url.hash.replace("#", ""));
-            const accessToken = hashParams.get("access_token");
-            const refreshToken = hashParams.get("refresh_token");
-
-            if (accessToken) {
-              const { error } = await supabase.auth.setSession({
-                access_token: accessToken,
-                refresh_token: refreshToken || "",
-              });
-              if (error) {
-                console.error("Set session error:", error);
-                navigate("/login", { replace: true });
-              } else {
-                navigate("/", { replace: true });
-              }
-            } else {
-              navigate("/login", { replace: true });
-            }
+            console.log("[appUrlOpen] session set OK");
+            // Let the rest of the app load normally
+            navigate("/", { replace: true });
           }
+
+          return;
         }
-      } catch (err) {
-        console.error("Deep link error:", err);
+
+        // PKCE fallback (if ever used)
+        const code = url.searchParams.get("code");
+        if (code) {
+          console.log("[appUrlOpen] exchanging code");
+          const { error } = await supabase.auth.exchangeCodeForSession(fullUrl);
+          if (error) {
+            console.error("[appUrlOpen] exchangeCode error:", error);
+            navigate("/login", { replace: true });
+          } else {
+            navigate("/", { replace: true });
+          }
+          return;
+        }
+
+        console.log("[appUrlOpen] no token or code found");
         navigate("/login", { replace: true });
+      } catch (err) {
+        console.error("[appUrlOpen] error:", err);
+        navigate("/login", { replace: true });
+      } finally {
+        isHandling.current = false;
       }
     };
 
@@ -89,56 +134,44 @@ function DeepLinkListener() {
 }
 
 /**
- * OAuth callback handler
- * Supports BOTH:
- * - PKCE flow (recommended): ?code=...
- * - Implicit flow (legacy): #access_token=...&refresh_token=...
+ * OAuth callback handler for web
  */
 function AuthCallback() {
   const [, navigate] = useLocation();
+  const processed = useRef(false);
 
   useEffect(() => {
-    let cancelled = false;
+    if (processed.current) return;
+    processed.current = true;
 
     async function handleAuthCallback() {
       try {
         const url = window.location.href;
         const u = new URL(url);
 
-        // ✅ PKCE: Supabase sends ?code=...
         const code = u.searchParams.get("code");
         if (code) {
-          const { error } = await supabase.auth.exchangeCodeForSession(url);
-          if (error) console.error("exchangeCodeForSession error:", error);
+          await supabase.auth.exchangeCodeForSession(url);
         } else {
-          // ✅ Fallback: Implicit flow tokens
           const hashParams = new URLSearchParams(u.hash.replace(/^#/, ""));
           const accessToken = hashParams.get("access_token");
           const refreshToken = hashParams.get("refresh_token");
 
           if (accessToken) {
-            const { error } = await supabase.auth.setSession({
+            await supabase.auth.setSession({
               access_token: accessToken,
               refresh_token: refreshToken || "",
             });
-            if (error) console.error("setSession error:", error);
           }
         }
       } catch (err) {
         console.error("AuthCallback failed:", err);
-      } finally {
-        if (!cancelled) {
-          // Let AuthProvider onAuthStateChange drive the rest
-          navigate("/", { replace: true });
-        }
       }
+
+      navigate("/", { replace: true });
     }
 
     handleAuthCallback();
-
-    return () => {
-      cancelled = true;
-    };
   }, [navigate]);
 
   return (
@@ -148,13 +181,12 @@ function AuthCallback() {
   );
 }
 
-// Simple auth gate that works with wouter
 function RequireAuth({ children }: { children: JSX.Element }) {
   const { user, loading: authLoading } = useAuth();
   const { isProfileLoading, isOnboardingComplete } = usePregnancyState();
   const [, navigate] = useLocation();
 
-  // Ensure a pregnancy profile exists for every authenticated user.
+  // Ensure profile exists
   useEffect(() => {
     if (!user || authLoading) return;
 
@@ -194,12 +226,12 @@ function RequireAuth({ children }: { children: JSX.Element }) {
     };
   }, [user, authLoading]);
 
-  // Authentication and Onboarding Redirect Logic
+  // Redirect logic
   useEffect(() => {
     if (authLoading) return;
 
     if (!user) {
-      navigate("/login");
+      navigate("/login", { replace: true });
       return;
     }
 
@@ -207,12 +239,12 @@ function RequireAuth({ children }: { children: JSX.Element }) {
 
     if (user && !isOnboardingComplete) {
       localStorage.removeItem("bump_skip_due");
-      navigate("/onboarding");
+      navigate("/onboarding", { replace: true });
       return;
     }
 
     if (isOnboardingComplete && window.location.pathname === "/onboarding") {
-      navigate("/");
+      navigate("/", { replace: true });
     }
   }, [authLoading, user, isProfileLoading, isOnboardingComplete, navigate]);
 
@@ -233,8 +265,6 @@ function Router() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
-
-      {/* OAuth callback - handles redirect from auth providers */}
       <Route path="/auth/callback" component={AuthCallback} />
 
       <Route path="/onboarding">
