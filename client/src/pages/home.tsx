@@ -8,6 +8,7 @@ import { DailyCheckIn } from "@/components/daily-checkin";
 import { GentleNudge } from "@/components/gentle-nudge";
 import { usePregnancyState } from "@/hooks/usePregnancyState";
 import { WeeklyWisdom } from "@/components/weekly-wisdom";
+import { Registries } from "@/components/registries";
 import { useTodayLogs } from "@/hooks/usePregnancyLogs";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
@@ -16,7 +17,6 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Sparkles } from "lucide-react";
 import generatedBg from "@/asset/soft_pastel_gradient_background_with_organic_shapes.png";
 
 type NextAppt = {
@@ -45,7 +45,7 @@ export default function Home() {
   const [editingName, setEditingName] = useState(false);
   const [tempName, setTempName] = useState(babyName ?? "");
 
-  // Get today's check-ins for nudge context
+  // Get today's check-ins for nudge + AI context
   const todayDate = format(new Date(), "yyyy-MM-dd");
   const { data: todayLogs = [] } = useTodayLogs(todayDate);
 
@@ -59,35 +59,12 @@ export default function Home() {
       : [];
     
     return {
+      slot: mostRecent?.slot as string | undefined,
       mood: mostRecent?.mood as "happy" | "neutral" | "sad" | null,
       symptoms,
+      notes: mostRecent?.notes ? String(mostRecent.notes) : undefined,
     };
   }, [todayLogs]);
-
-  // Build AI route URL with prefilled context
-  const aiRouteUrl = useMemo(() => {
-    const params = new URLSearchParams();
-    params.set("week", String(currentWeek));
-    
-    if (checkinContext) {
-      if (checkinContext.mood) {
-        params.set("mood", checkinContext.mood);
-      }
-      if (checkinContext.symptoms && checkinContext.symptoms.length > 0) {
-        params.set("symptoms", checkinContext.symptoms.join(", "));
-      }
-      
-      const mostRecent = todayLogs[todayLogs.length - 1];
-      if (mostRecent?.slot) {
-        params.set("slot", mostRecent.slot);
-      }
-      if (mostRecent?.notes) {
-        params.set("notes", String(mostRecent.notes));
-      }
-    }
-    
-    return `/ai?${params.toString()}`;
-  }, [currentWeek, checkinContext, todayLogs]);
 
   useEffect(() => {
     setTempName(babyName ?? "");
@@ -160,7 +137,7 @@ export default function Home() {
   return (
     <Layout dueDate={dueDate} setDueDate={setDueDate}>
       <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-        {/* Hero Section - Enhanced visual presence */}
+        {/* Hero Section */}
         <section className="relative rounded-3xl overflow-hidden p-10 md:p-14 text-white">
           <div
             className="absolute inset-0 bg-cover bg-center z-0"
@@ -245,7 +222,7 @@ export default function Home() {
           <div className="md:col-span-2 space-y-8">
             <BabySizeDisplay currentWeek={currentWeek} />
 
-            {/* Gentle Nudge - Directly ABOVE WeekProgress */}
+            {/* Gentle Nudge */}
             <GentleNudge checkinContext={checkinContext} />
 
             <div className="bg-card rounded-xl p-6 border border-border shadow-sm space-y-4">
@@ -286,31 +263,6 @@ export default function Home() {
                 </div>
               </Link>
             </div>
-
-            {/* "Is this normal…?" - Matches Weekly Wisdom styling */}
-            <Link href={aiRouteUrl}>
-              <div
-                className={cn(
-                  "flex items-center gap-3 p-4 rounded-xl cursor-pointer",
-                  "bg-primary/10 border border-primary/20",
-                  "hover:bg-primary/15 transition-colors"
-                )}
-              >
-                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
-                  <Sparkles className="w-5 h-5 text-primary" />
-                </div>
-                <div className="flex-1">
-                  <p className="font-medium text-sm text-foreground">Is this normal…?</p>
-                  <p className="text-xs text-muted-foreground">
-                    Ask FLO about your symptoms
-                  </p>
-                </div>
-                <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary shrink-0">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                  FLO
-                </span>
-              </div>
-            </Link>
           </div>
 
           <div className="space-y-8">
@@ -318,7 +270,15 @@ export default function Home() {
           </div>
         </div>
 
-        <WeeklyWisdom currentWeek={currentWeek} trimester={trimester} />
+        {/* Weekly Wisdom - Primary AI entry point with context */}
+        <WeeklyWisdom 
+          currentWeek={currentWeek} 
+          trimester={trimester} 
+          checkinContext={checkinContext}
+        />
+
+        {/* Registries */}
+        <Registries />
       </div>
     </Layout>
   );

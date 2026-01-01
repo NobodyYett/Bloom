@@ -34,9 +34,9 @@ const SYMPTOM_CHIPS = [
 ];
 
 const slotIcons: Record<CheckinSlot, React.ReactNode> = {
-  morning: <Sun className="w-4 h-4" />,
-  evening: <Sunset className="w-4 h-4" />,
-  night: <Moon className="w-4 h-4" />,
+  morning: <Sun className="w-3.5 h-3.5 shrink-0" />,
+  evening: <Sunset className="w-3.5 h-3.5 shrink-0" />,
+  night: <Moon className="w-3.5 h-3.5 shrink-0" />,
 };
 
 export function DailyCheckIn({ currentWeek }: DailyCheckInProps) {
@@ -112,7 +112,7 @@ export function DailyCheckIn({ currentWeek }: DailyCheckInProps) {
   }
 
   const cardClass =
-    "h-full bg-card rounded-xl p-6 border border-border shadow-sm flex flex-col";
+    "h-full bg-card rounded-xl p-6 border border-border shadow-sm flex flex-col overflow-hidden";
 
   const moodLabel = (mood: string) =>
     mood === "happy" ? "great" : mood === "neutral" ? "okay" : "not so good";
@@ -134,7 +134,7 @@ export function DailyCheckIn({ currentWeek }: DailyCheckInProps) {
     }
   };
 
-  const slotLabel = (log: any) => {
+  const slotLabelFn = (log: any) => {
     const slot = log?.slot || log?.time_of_day;
     if (!slot) return "";
     return getSlotLabel(slot as CheckinSlot);
@@ -170,7 +170,7 @@ export function DailyCheckIn({ currentWeek }: DailyCheckInProps) {
   const moodBtnActive = "border-primary bg-primary/5 text-primary";
 
   const slotBtnBase =
-    "flex-1 flex items-center justify-center gap-1.5 py-2 px-2 rounded-lg border transition-all text-sm";
+    "flex-1 flex items-center justify-center gap-1 py-2 px-1 rounded-lg border transition-all text-xs min-w-0";
   const slotBtnInactive = "border-border hover:bg-muted text-muted-foreground";
   const slotBtnActive = "border-primary bg-primary/10 text-primary font-medium";
   const slotBtnCompleted = "border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-400";
@@ -187,8 +187,8 @@ export function DailyCheckIn({ currentWeek }: DailyCheckInProps) {
         </p>
       </div>
 
-      {/* Slot Selector */}
-      <div className="mt-4 flex gap-2">
+      {/* Slot Selector - constrained width */}
+      <div className="mt-4 flex gap-1.5 w-full">
         {ALL_SLOTS.map((slot) => {
           const isCompleted = completedSlots.has(slot);
           const isSelected = selectedSlot === slot;
@@ -205,8 +205,8 @@ export function DailyCheckIn({ currentWeek }: DailyCheckInProps) {
               )}
             >
               {slotIcons[slot]}
-              <span>{getSlotLabel(slot)}</span>
-              {isCompleted && <span className="text-xs">✓</span>}
+              <span className="truncate">{getSlotLabel(slot)}</span>
+              {isCompleted && <span className="text-[10px]">✓</span>}
             </button>
           );
         })}
@@ -325,8 +325,8 @@ export function DailyCheckIn({ currentWeek }: DailyCheckInProps) {
                 </div>
 
                 <div className="space-y-0.5 flex-1 min-w-0">
-                  <div className="text-xs text-muted-foreground flex items-center gap-1">
-                    <span className="font-medium">{slotLabel(log)}</span>
+                  <div className="text-xs text-muted-foreground flex items-center gap-1 flex-wrap">
+                    <span className="font-medium">{slotLabelFn(log)}</span>
                     <span>•</span>
                     <span>{timeLabel(log)}</span>
                     {log?.mood && (
