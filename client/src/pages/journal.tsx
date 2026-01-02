@@ -39,26 +39,26 @@ function Journal() {
     happy: {
       icon: Smile,
       label: "Great",
-      bg: "bg-green-50",
-      border: "border-green-200",
-      text: "text-green-700",
-      iconColor: "text-green-500",
+      bg: "bg-green-50 dark:bg-green-950/40",
+      border: "border-green-200 dark:border-green-800",
+      title: "text-green-800 dark:text-green-200",
+      iconColor: "text-green-600 dark:text-green-400",
     },
     neutral: {
       icon: Meh,
       label: "Okay",
-      bg: "bg-yellow-50",
-      border: "border-yellow-200",
-      text: "text-yellow-700",
-      iconColor: "text-yellow-500",
+      bg: "bg-yellow-50 dark:bg-yellow-950/40",
+      border: "border-yellow-200 dark:border-yellow-800",
+      title: "text-yellow-800 dark:text-yellow-200",
+      iconColor: "text-yellow-600 dark:text-yellow-400",
     },
     sad: {
       icon: Frown,
       label: "Not great",
-      bg: "bg-red-50",
-      border: "border-red-200",
-      text: "text-red-700",
-      iconColor: "text-red-500",
+      bg: "bg-red-50 dark:bg-red-950/40",
+      border: "border-red-200 dark:border-red-800",
+      title: "text-red-800 dark:text-red-200",
+      iconColor: "text-red-600 dark:text-red-400",
     },
   };
 
@@ -174,7 +174,7 @@ function Journal() {
                             <div
                               className={cn(
                                 "w-10 h-10 rounded-full flex items-center justify-center",
-                                "bg-white shadow-sm"
+                                "bg-white dark:bg-white/10 shadow-sm"
                               )}
                             >
                               <MoodIcon
@@ -182,10 +182,10 @@ function Journal() {
                               />
                             </div>
                             <div>
-                              <div className={cn("font-medium", mood.text)}>
+                              <div className={cn("font-semibold", mood.title)}>
                                 Feeling {mood.label.toLowerCase()}
                               </div>
-                              <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                              <div className="flex items-center gap-3 text-xs text-foreground/60 mt-0.5">
                                 <span className="flex items-center gap-1">
                                   <Calendar className="w-3 h-3" />
                                   {format(logDate, "EEEE, MMM d")}
@@ -207,10 +207,10 @@ function Journal() {
                         {/* Symptoms */}
                         {log.symptoms && (
                           <div className="mb-3">
-                            <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+                            <h4 className="text-xs font-semibold text-foreground/70 uppercase tracking-wide mb-1">
                               Symptoms
                             </h4>
-                            <p className="text-sm text-foreground">
+                            <p className="text-sm text-foreground font-medium">
                               {log.symptoms}
                             </p>
                           </div>
@@ -219,7 +219,7 @@ function Journal() {
                         {/* Notes */}
                         {log.notes && (
                           <div>
-                            <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
+                            <h4 className="text-xs font-semibold text-foreground/70 uppercase tracking-wide mb-1">
                               Notes
                             </h4>
                             <p className="text-sm text-foreground leading-relaxed">
@@ -230,7 +230,7 @@ function Journal() {
 
                         {/* Empty content indicator */}
                         {!log.symptoms && !log.notes && (
-                          <p className="text-sm text-muted-foreground italic">
+                          <p className="text-sm text-foreground/50 italic">
                             No additional notes for this day
                           </p>
                         )}
@@ -258,20 +258,20 @@ function Journal() {
                   Total Entries
                 </div>
               </div>
-              <div className="text-center p-4 rounded-lg bg-green-50">
-                <div className="text-2xl font-bold text-green-600">
+              <div className="text-center p-4 rounded-lg bg-green-50 dark:bg-green-950/40">
+                <div className="text-2xl font-bold text-green-600 dark:text-green-400">
                   {logs.filter((l) => l.mood === "happy").length}
                 </div>
                 <div className="text-xs text-muted-foreground">Great Days</div>
               </div>
-              <div className="text-center p-4 rounded-lg bg-yellow-50">
-                <div className="text-2xl font-bold text-yellow-600">
+              <div className="text-center p-4 rounded-lg bg-yellow-50 dark:bg-yellow-950/40">
+                <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
                   {logs.filter((l) => l.mood === "neutral").length}
                 </div>
                 <div className="text-xs text-muted-foreground">Okay Days</div>
               </div>
-              <div className="text-center p-4 rounded-lg bg-red-50">
-                <div className="text-2xl font-bold text-red-600">
+              <div className="text-center p-4 rounded-lg bg-red-50 dark:bg-red-950/40">
+                <div className="text-2xl font-bold text-red-600 dark:text-red-400">
                   {logs.filter((l) => l.mood === "sad").length}
                 </div>
                 <div className="text-xs text-muted-foreground">Tough Days</div>
