@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { format, differenceInDays } from "date-fns";
 import { 
   Loader2, Save, Trash2, AlertTriangle, Sun, Moon, Monitor, Bell, 
-  Users, Copy, Check, Link2, Clock, Calendar
+  Users, Copy, Check, Link2, Clock, Calendar, Lightbulb
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme, type ThemeMode } from "@/theme/theme-provider";
@@ -89,6 +89,12 @@ export default function SettingsPage() {
   const [togglingMorning, setTogglingMorning] = useState(false);
   const [togglingEvening, setTogglingEvening] = useState(false);
   const [togglingAppointments, setTogglingAppointments] = useState(false);
+
+  // Task suggestions state
+  const [taskSuggestionsEnabled, setTaskSuggestionsEnabled] = useState(() => {
+    const stored = localStorage.getItem("bumpplanner_show_task_suggestions");
+    return stored !== "false"; // Default: true
+  });
 
   const email = user?.email ?? "Unknown";
 
@@ -248,6 +254,19 @@ export default function SettingsPage() {
     toast({
       title: "Reminder time updated",
       description: "New appointments will use this reminder time.",
+    });
+  }
+
+  function handleTaskSuggestionsToggle(enabled: boolean) {
+    setTaskSuggestionsEnabled(enabled);
+    localStorage.setItem("bumpplanner_show_task_suggestions", enabled ? "true" : "false");
+    // Dispatch custom event for same-tab updates
+    window.dispatchEvent(new Event("taskSuggestionsChanged"));
+    toast({
+      title: enabled ? "Suggestions enabled" : "Suggestions disabled",
+      description: enabled
+        ? "You'll see task ideas based on your pregnancy progress."
+        : "Task suggestions are now hidden.",
     });
   }
 
@@ -539,6 +558,38 @@ export default function SettingsPage() {
             )}
           </div>
         </section>
+
+        {/* To-Do List Settings - only for mom */}
+        {!isPartnerView && (
+          <section className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-muted/30 px-6 py-4 border-b border-border">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <Lightbulb className="w-5 h-5" />
+                To-Do List
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Customize your shared to-do list experience.
+              </p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Pregnancy task suggestions</label>
+                  <p className="text-xs text-muted-foreground">
+                    Show suggested to-dos based on pregnancy progress.
+                  </p>
+                </div>
+                <Switch
+                  checked={taskSuggestionsEnabled}
+                  onCheckedChange={handleTaskSuggestionsToggle}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Suggestions are personalized to your current week and won't repeat tasks you've already added.
+              </p>
+            </div>
+          </section>
+        )}
 
         {/* Partner Access - only for mom */}
         {!isPartnerView && (

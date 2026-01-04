@@ -1,93 +1,399 @@
+// client/src/pages/appointments.tsx
+
 import { useEffect, useState } from "react";
+import { Layout } from "@/components/layout";
+import { usePregnancyState } from "@/hooks/usePregnancyState";
+import { usePartnerAccess } from "@/contexts/PartnerContext";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
-import { CalendarDays, Clock, MapPin } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { Link } from "wouter";
+import {
+  Calendar as CalendarIcon,
+  CalendarPlus,
+  MapPin,
+  Clock,
+  Trash2,
+  Plus,
+  Eye,
+} from "lucide-react";
+import { addToCalendar } from "@/lib/calendarExport";
 
-type NextAppt = {
+type Appointment = {
   id: string;
   title: string;
   starts_at: string;
   location: string | null;
+  notes: string | null;
 };
 
-export function NextAppointmentCard() {
+export default function AppointmentsPage() {
   const { user } = useAuth();
-  const [nextAppt, setNextAppt] = useState<NextAppt | null>(null);
+  const { dueDate, setDueDate } = usePregnancyState();
+  const { isPartnerView, momName } = usePartnerAccess();
+
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [title, setTitle] = useState("");
+  const [startsAt, setStartsAt] = useState("");
+  const [location, setLocation] = useState("");
+  const [notes, setNotes] = useState("");
+
   const [loading, setLoading] = useState(false);
+  const [isSaving, setSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user) return;
+    async function load() {
+      if (!user) {
+        setAppointments([]);
+        setErrorMsg(null);
+        setLoading(false);
+        return;
+      }
 
-    async function loadNextAppt() {
       setLoading(true);
-      const nowIso = new Date().toISOString();
+      setErrorMsg(null);
 
+      // For partners, the RLS policy will return appointments they have access to
       const { data, error } = await supabase
         .from("pregnancy_appointments")
-        .select("id, title, starts_at, location")
-        .eq("user_id", user.id)
-        .gte("starts_at", nowIso)
-        .order("starts_at", { ascending: true })
-        .limit(1);
+        .select("id, title, starts_at, location, notes")
+        .order("starts_at", { ascending: true });
 
       setLoading(false);
 
       if (error) {
-        console.error("Error loading next appointment:", error);
-        setNextAppt(null);
+        console.error(error);
+        setErrorMsg("Couldn't load appointments. Please try again.");
         return;
       }
 
-      setNextAppt(data && data.length > 0 ? (data[0] as NextAppt) : null);
+      setAppointments((data || []) as Appointment[]);
     }
 
-    loadNextAppt();
+    load();
   }, [user]);
 
+  async function handleAdd(e: React.FormEvent) {
+    e.preventDefault();
+    if (!user || isPartnerView) return;
+
+    if (!title.trim() || !startsAt) {
+      setErrorMsg("Please add a title and date/time.");
+      return;
+    }
+
+    setSaving(true);
+    setErrorMsg(null);
+
+    const { error } = await supabase
+      .from("pregnancy_appointments")
+      .insert([
+        {
+          user_id: user.id,
+          title: title.trim(),
+          starts_at: new Date(startsAt).toISOString(),
+          location: location.trim() || null,
+          notes: notes.trim() || null,
+        },
+      ])
+      .select("id, title, starts_at, location, notes");
+
+    setSaving(false);
+
+    if (error) {
+      console.error(error);
+      setErrorMsg("Couldn't save your appointment. Please try again.");
+      return;
+    }
+
+    // Reload list
+    const { data: refreshed, error: refreshError } = await supabase
+      .from("pregnancy_appointments")
+      .select("id, title, starts_at, location, notes")
+      .order("starts_at", { ascending: true });
+
+    if (refreshError) {
+      console.error(refreshError);
+      setErrorMsg("Saved, but couldn't refresh the list.");
+      return;
+    }
+
+    setAppointments((refreshed || []) as Appointment[]);
+    setTitle("");
+    setStartsAt("");
+    setLocation("");
+    setNotes("");
+  }
+
+  async function handleDelete(id: string) {
+    if (!user || isPartnerView) return;
+    if (!window.confirm("Remove this appointment?")) return;
+
+    const { error } = await supabase
+      .from("pregnancy_appointments")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", user.id);
+
+    if (error) {
+      console.error(error);
+      setErrorMsg("Couldn't delete that appointment.");
+      return;
+    }
+
+    setAppointments((prev) => prev.filter((a) => a.id !== id));
+  }
+
+  const upcoming = appointments.filter(
+    (a) => new Date(a.starts_at).getTime() >= Date.now(),
+  );
+  const past = appointments.filter(
+    (a) => new Date(a.starts_at).getTime() < Date.now(),
+  );
+
   return (
-    <div className="mt-6 pt-5 border-t border-border/70">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <CalendarDays className="w-4 h-4 text-muted-foreground" />
-          <h3 className="text-sm font-medium text-foreground">
-            Next appointment
-          </h3>
-        </div>
-
-        <Link href="/appointments">
-          <span className="text-xs text-primary hover:underline cursor-pointer">
-            View calendar
-          </span>
-        </Link>
-      </div>
-
-      {loading ? (
-        <p className="text-xs text-muted-foreground">Checking your schedule…</p>
-      ) : !nextAppt ? (
-        <p className="text-xs text-muted-foreground">
-          No upcoming appointments yet. Add one from the calendar.
-        </p>
-      ) : (
-        <Link href="/appointments">
-          <div className="mt-2 cursor-pointer rounded-xl border border-primary/40 bg-primary/10 px-3 py-3 text-sm text-primary hover:bg-primary/15 transition-colors">
-            <div className="font-medium truncate">{nextAppt.title}</div>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-primary/80">
-              <span className="flex items-center gap-1">
-                <Clock className="w-3 h-3" />
-                {format(new Date(nextAppt.starts_at), "EEE, MMM d • h:mm a")}
+    <Layout dueDate={dueDate} setDueDate={setDueDate}>
+      <div className="max-w-3xl mx-auto space-y-8 pb-10">
+        <header className="space-y-2">
+          <div className="flex items-center gap-2">
+            <h1 className="font-serif text-3xl font-bold tracking-tight">
+              Appointments
+            </h1>
+            {isPartnerView && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-xs text-muted-foreground">
+                <Eye className="w-3 h-3" />
+                View only
               </span>
-              {nextAppt.location && (
-                <span className="flex items-center gap-1">
-                  <MapPin className="w-3 h-3" />
-                  {nextAppt.location}
-                </span>
-              )}
-            </div>
+            )}
           </div>
-        </Link>
-      )}
-    </div>
+          <p className="text-muted-foreground">
+            {isPartnerView 
+              ? `View ${momName ? `${momName}'s` : "upcoming"} prenatal visits and important dates.`
+              : "Keep track of your prenatal visits and important check-ins."
+            }
+          </p>
+        </header>
+
+        {/* Add form - hidden for partners */}
+        {!isPartnerView && (
+          <section className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-muted/30 px-6 py-4 border-b border-border flex items-center gap-2">
+              <CalendarIcon className="h-5 w-5" />
+              <div>
+                <h2 className="text-lg font-semibold">Add appointment</h2>
+                <p className="text-sm text-muted-foreground">
+                  Add upcoming dates and notes for your visits.
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handleAdd} className="p-6 grid gap-4">
+              {errorMsg && (
+                <div className="text-sm text-destructive">{errorMsg}</div>
+              )}
+
+              <div className="grid gap-2">
+                <label className="text-sm font-medium">Title</label>
+                <Input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Ultrasound"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <label className="text-sm font-medium">Date & time</label>
+                <Input
+                  type="datetime-local"
+                  value={startsAt}
+                  onChange={(e) => setStartsAt(e.target.value)}
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <label className="text-sm font-medium flex items-center gap-2">
+                  <MapPin className="h-4 w-4" /> Location (optional)
+                </label>
+                <Input
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="Clinic / hospital"
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <label className="text-sm font-medium">Notes (optional)</label>
+                <Textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Questions to ask, what to bring, etc."
+                />
+              </div>
+
+              <div className="flex justify-end">
+                <Button type="submit" disabled={isSaving}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  {isSaving ? "Saving..." : "Add"}
+                </Button>
+              </div>
+            </form>
+          </section>
+        )}
+
+        {/* Upcoming appointments */}
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <Clock className="h-5 w-5" />
+            Upcoming
+          </h2>
+
+          {loading ? (
+            <div className="text-sm text-muted-foreground">Loading...</div>
+          ) : upcoming.length === 0 ? (
+            <div className="text-sm text-muted-foreground">
+              No upcoming appointments.
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              {upcoming.map((a) => (
+                <div
+                  key={a.id}
+                  className={cn(
+                    "bg-card border border-border rounded-xl p-4 flex items-start justify-between gap-4",
+                  )}
+                >
+                  <div className="space-y-1 flex-1">
+                    <div className="font-medium">{a.title}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {format(new Date(a.starts_at), "PPP 'at' p")}
+                    </div>
+                    {a.location && (
+                      <div className="text-sm text-muted-foreground flex items-center gap-1">
+                        <MapPin className="w-3 h-3" />
+                        {a.location}
+                      </div>
+                    )}
+                    {/* Notes hidden for partners (may contain private medical info) */}
+                    {!isPartnerView && a.notes && (
+                      <div className="text-sm text-muted-foreground">
+                        {a.notes}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action buttons */}
+                  <div className="flex items-center gap-1">
+                    {/* Add to Calendar - available for both Mom and Partner */}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => addToCalendar({
+                        id: a.id,
+                        title: a.title,
+                        starts_at: a.starts_at,
+                        location: a.location,
+                        // Don't include notes for privacy
+                      })}
+                      aria-label="Add to calendar"
+                      title="Add to calendar"
+                    >
+                      <CalendarPlus className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+
+                    {/* Delete button - hidden for partners */}
+                    {!isPartnerView && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(a.id)}
+                        aria-label="Delete appointment"
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {/* Past appointments */}
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold">Past</h2>
+
+          {loading ? (
+            <div className="text-sm text-muted-foreground">Loading...</div>
+          ) : past.length === 0 ? (
+            <div className="text-sm text-muted-foreground">
+              No past appointments.
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              {past.map((a) => (
+                <div
+                  key={a.id}
+                  className="bg-card border border-border rounded-xl p-4 flex items-start justify-between gap-4 opacity-70"
+                >
+                  <div className="space-y-1 flex-1">
+                    <div className="font-medium">{a.title}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {format(new Date(a.starts_at), "PPP 'at' p")}
+                    </div>
+                    {a.location && (
+                      <div className="text-sm text-muted-foreground flex items-center gap-1">
+                        <MapPin className="w-3 h-3" />
+                        {a.location}
+                      </div>
+                    )}
+                    {/* Notes hidden for partners */}
+                    {!isPartnerView && a.notes && (
+                      <div className="text-sm text-muted-foreground">
+                        {a.notes}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Action buttons */}
+                  <div className="flex items-center gap-1">
+                    {/* Add to Calendar - available for both Mom and Partner */}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => addToCalendar({
+                        id: a.id,
+                        title: a.title,
+                        starts_at: a.starts_at,
+                        location: a.location,
+                      })}
+                      aria-label="Add to calendar"
+                      title="Add to calendar"
+                    >
+                      <CalendarPlus className="h-4 w-4 text-muted-foreground" />
+                    </Button>
+
+                    {/* Delete button - hidden for partners */}
+                    {!isPartnerView && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(a.id)}
+                        aria-label="Delete appointment"
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+    </Layout>
   );
 }

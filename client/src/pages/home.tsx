@@ -48,6 +48,27 @@ export default function Home() {
   const [nextAppt, setNextAppt] = useState<NextAppt | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [tempName, setTempName] = useState(babyName ?? "");
+  
+  // Task suggestion setting (read from localStorage)
+  const [showTaskSuggestions, setShowTaskSuggestions] = useState(() => {
+    const stored = localStorage.getItem("bumpplanner_show_task_suggestions");
+    return stored !== "false"; // Default: true
+  });
+  
+  // Listen for changes from settings page
+  useEffect(() => {
+    function handleStorageChange() {
+      const stored = localStorage.getItem("bumpplanner_show_task_suggestions");
+      setShowTaskSuggestions(stored !== "false");
+    }
+    window.addEventListener("storage", handleStorageChange);
+    // Also listen for custom event (same-tab updates)
+    window.addEventListener("taskSuggestionsChanged", handleStorageChange);
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("taskSuggestionsChanged", handleStorageChange);
+    };
+  }, []);
 
   // TODO: Replace with actual subscription check
   const isPaid = false;
@@ -347,6 +368,7 @@ export default function Home() {
               trimester={trimester}
               currentWeek={currentWeek}
               isPartnerView={isPartnerView}
+              showSuggestions={showTaskSuggestions}
             />
           );
         })()}

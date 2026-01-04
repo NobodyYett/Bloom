@@ -21,6 +21,7 @@ interface SharedTasksCardProps {
   trimester: 1 | 2 | 3;
   currentWeek: number;
   isPartnerView?: boolean;
+  showSuggestions?: boolean;  // Default: true
 }
 
 // Smart task suggestions based on current week
@@ -208,7 +209,7 @@ function getSmartSuggestions(
     .slice(0, 3);
 }
 
-export function SharedTasksCard({ momUserId, trimester, currentWeek, isPartnerView = false }: SharedTasksCardProps) {
+export function SharedTasksCard({ momUserId, trimester, currentWeek, isPartnerView = false, showSuggestions = true }: SharedTasksCardProps) {
   const { user } = useAuth();
   const [tasks, setTasks] = useState<SharedTask[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState("");
@@ -216,10 +217,10 @@ export function SharedTasksCard({ momUserId, trimester, currentWeek, isPartnerVi
   const [isAdding, setIsAdding] = useState(false);
   const [tableExists, setTableExists] = useState(true);
 
-  // Get smart suggestions based on week and existing tasks
+  // Get smart suggestions based on week and existing tasks (only if enabled)
   const smartSuggestions = useMemo(
-    () => getSmartSuggestions(currentWeek, tasks),
-    [currentWeek, tasks]
+    () => showSuggestions ? getSmartSuggestions(currentWeek, tasks) : [],
+    [currentWeek, tasks, showSuggestions]
   );
 
   // Fetch tasks

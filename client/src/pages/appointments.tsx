@@ -9,16 +9,25 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import {
   Calendar as CalendarIcon,
+  CalendarPlus,
   MapPin,
   Clock,
   Trash2,
   Plus,
   Eye,
+  MoreVertical,
 } from "lucide-react";
+import { addToCalendar } from "@/lib/calendarExport";
 
 type Appointment = {
   id: string;
@@ -264,7 +273,7 @@ export default function AppointmentsPage() {
                     "bg-card border border-border rounded-xl p-4 flex items-start justify-between gap-4",
                   )}
                 >
-                  <div className="space-y-1">
+                  <div className="space-y-1 flex-1">
                     <div className="font-medium">{a.title}</div>
                     <div className="text-sm text-muted-foreground">
                       {format(new Date(a.starts_at), "PPP 'at' p")}
@@ -283,17 +292,40 @@ export default function AppointmentsPage() {
                     )}
                   </div>
 
-                  {/* Delete button - hidden for partners */}
-                  {!isPartnerView && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDelete(a.id)}
-                      aria-label="Delete appointment"
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  )}
+                  {/* Options menu */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Appointment options"
+                      >
+                        <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => addToCalendar({
+                          id: a.id,
+                          title: a.title,
+                          starts_at: a.starts_at,
+                          location: a.location,
+                        })}
+                      >
+                        <CalendarPlus className="mr-2 h-4 w-4" />
+                        Add to Calendar
+                      </DropdownMenuItem>
+                      {!isPartnerView && (
+                        <DropdownMenuItem
+                          onClick={() => handleDelete(a.id)}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               ))}
             </div>
@@ -315,9 +347,9 @@ export default function AppointmentsPage() {
               {past.map((a) => (
                 <div
                   key={a.id}
-                  className="bg-card border border-border rounded-xl p-4 flex items-start justify-between gap-4 opacity-90"
+                  className="bg-card border border-border rounded-xl p-4 flex items-start justify-between gap-4 opacity-70"
                 >
-                  <div className="space-y-1">
+                  <div className="space-y-1 flex-1">
                     <div className="font-medium">{a.title}</div>
                     <div className="text-sm text-muted-foreground">
                       {format(new Date(a.starts_at), "PPP 'at' p")}
@@ -336,17 +368,40 @@ export default function AppointmentsPage() {
                     )}
                   </div>
 
-                  {/* Delete button - hidden for partners */}
-                  {!isPartnerView && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDelete(a.id)}
-                      aria-label="Delete appointment"
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  )}
+                  {/* Options menu */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Appointment options"
+                      >
+                        <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => addToCalendar({
+                          id: a.id,
+                          title: a.title,
+                          starts_at: a.starts_at,
+                          location: a.location,
+                        })}
+                      >
+                        <CalendarPlus className="mr-2 h-4 w-4" />
+                        Add to Calendar
+                      </DropdownMenuItem>
+                      {!isPartnerView && (
+                        <DropdownMenuItem
+                          onClick={() => handleDelete(a.id)}
+                          className="text-destructive focus:text-destructive"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               ))}
             </div>
