@@ -9,7 +9,6 @@ import { WeeklySummary } from "@/components/weekly-summary";
 import { usePregnancyState } from "@/hooks/usePregnancyState";
 import { WeeklyWisdom } from "@/components/weekly-wisdom";
 import { Registries } from "@/components/registries";
-import { PartnerSupportCard } from "@/components/partner-support-card";
 import { useTodayLogs } from "@/hooks/usePregnancyLogs";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
@@ -278,12 +277,14 @@ export default function Home() {
               </Link>
             </div>
 
-            {/* Weekly Summary - shows how mom is feeling (for partner awareness) */}
-            <WeeklySummary 
-              isPaid={isPaid} 
-              checkinContext={checkinContext}
-              isPartnerView={isPartnerView}
-            />
+            {/* Weekly Summary - only for mom in left column */}
+            {!isPartnerView && (
+              <WeeklySummary 
+                isPaid={isPaid} 
+                checkinContext={checkinContext}
+                isPartnerView={false}
+              />
+            )}
           </div>
 
           {/* Right column */}
@@ -293,12 +294,16 @@ export default function Home() {
               <DailyCheckIn currentWeek={currentWeek} />
             )}
             
-            {/* Partner Support Card - fills the right column for partners */}
+            {/* Merged "How She's Doing" card for partners */}
             {isPartnerView && (
-              <PartnerSupportCard 
+              <WeeklySummary 
+                isPaid={false} 
+                checkinContext={null}
+                isPartnerView={true}
                 currentWeek={currentWeek}
                 trimester={trimester}
                 momName={partnerMomName}
+                hasUpcomingAppointment={!!nextAppt}
               />
             )}
           </div>
