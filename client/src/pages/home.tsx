@@ -9,6 +9,7 @@ import { WeeklySummary } from "@/components/weekly-summary";
 import { usePregnancyState } from "@/hooks/usePregnancyState";
 import { WeeklyWisdom } from "@/components/weekly-wisdom";
 import { Registries } from "@/components/registries";
+import { SharedTasksCard } from "@/components/shared-tasks-card";
 import { useTodayLogs } from "@/hooks/usePregnancyLogs";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
@@ -288,13 +289,13 @@ export default function Home() {
           </div>
 
           {/* Right column */}
-          <div className="space-y-8">
+          <div className="space-y-6">
             {/* Daily Check-in - only for mom */}
             {!isPartnerView && (
               <DailyCheckIn currentWeek={currentWeek} />
             )}
             
-            {/* Merged "How She's Doing" card for partners */}
+            {/* "How She's Doing" card for partners */}
             {isPartnerView && (
               <WeeklySummary 
                 isPaid={false} 
@@ -303,12 +304,24 @@ export default function Home() {
                 currentWeek={currentWeek}
                 trimester={trimester}
                 momName={partnerMomName}
-                momUserId={momUserId}
                 hasUpcomingAppointment={!!nextAppt}
               />
             )}
           </div>
         </div>
+
+        {/* Shared Tasks - separate card for both views */}
+        {(() => {
+          const taskUserId = isPartnerView ? momUserId : user?.id;
+          if (!taskUserId) return null;
+          return (
+            <SharedTasksCard
+              momUserId={taskUserId}
+              trimester={trimester}
+              isPartnerView={isPartnerView}
+            />
+          );
+        })()}
 
         {/* Weekly Wisdom - only for mom */}
         {!isPartnerView && (
