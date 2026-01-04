@@ -297,15 +297,19 @@ export default function Home() {
             
             {/* "How She's Doing" card for partners */}
             {isPartnerView && (
-              <WeeklySummary 
-                isPaid={false} 
-                checkinContext={null}
-                isPartnerView={true}
-                currentWeek={currentWeek}
-                trimester={trimester}
-                momName={partnerMomName}
-                hasUpcomingAppointment={!!nextAppt}
-              />
+              <>
+                <WeeklySummary 
+                  isPaid={false} 
+                  checkinContext={null}
+                  isPartnerView={true}
+                  currentWeek={currentWeek}
+                  trimester={trimester}
+                  momName={partnerMomName}
+                  hasUpcomingAppointment={!!nextAppt}
+                />
+                {/* Registry in sidebar for partner */}
+                <Registries isReadOnly={true} />
+              </>
             )}
           </div>
         </div>
@@ -319,8 +323,10 @@ export default function Home() {
           />
         )}
 
-        {/* Registries - visible to both, read-only for partner */}
-        <Registries isReadOnly={isPartnerView} />
+        {/* Registries - full width for mom only */}
+        {!isPartnerView && (
+          <Registries isReadOnly={false} />
+        )}
 
         {/* Shared Tasks - separate card for both views (after registries) */}
         {(() => {

@@ -235,6 +235,7 @@ export function WeeklySummary({
     }
   }
 
+  // Build summary text - different for mom vs partner
   const summaryParts: string[] = [];
   if (stats.dominantMood) {
     const moodText = getMoodLabel(stats.dominantMood);
@@ -248,6 +249,27 @@ export function WeeklySummary({
   const freeRecap = summaryParts.length > 0 
     ? summaryParts.join(", ") + "."
     : "No check-ins recorded this week yet.";
+
+  // Partner-specific personal summary (uses mom's name or "She")
+  const partnerSummary = useMemo(() => {
+    if (!stats.dominantMood) {
+      return momName 
+        ? `${momName} hasn't logged any check-ins this week yet.`
+        : "No check-ins recorded this week yet.";
+    }
+    
+    const moodText = getMoodLabel(stats.dominantMood);
+    const nameOrShe = momName || "She";
+    
+    let summary = `${nameOrShe}'s been feeling mostly ${moodText} this week`;
+    
+    if (stats.topSymptoms.length > 0) {
+      const symptomsText = stats.topSymptoms.slice(0, 2).join(" and ").toLowerCase();
+      summary += `, with ${symptomsText} showing up most often`;
+    }
+    
+    return summary + ".";
+  }, [stats.dominantMood, stats.topSymptoms, momName]);
 
   const hasWeekData = !isLoading && stats.totalCheckins > 0;
 
@@ -267,7 +289,9 @@ export function WeeklySummary({
               <Heart className="w-4 h-4 text-muted-foreground" />
             </div>
             <div>
-              <h2 className="font-medium text-sm text-foreground">How She's Feeling</h2>
+              <h2 className="font-medium text-sm text-foreground">
+                {momName ? `How ${momName}'s Feeling` : "How She's Feeling"}
+              </h2>
               <p className="text-xs text-muted-foreground">
                 {hasWeekData 
                   ? `${stats.totalCheckins} check-in${stats.totalCheckins !== 1 ? "s" : ""} this week`
@@ -282,9 +306,9 @@ export function WeeklySummary({
         <div className="p-5">
           {hasWeekData ? (
             <div className="space-y-4">
-              {/* Summary text */}
+              {/* Summary text - personal for partner */}
               <p className="text-sm text-foreground/90 leading-relaxed">
-                {freeRecap}
+                {partnerSummary}
               </p>
 
               {/* Vertical stacked indicators */}
@@ -329,7 +353,10 @@ export function WeeklySummary({
           ) : (
             <div className="text-center py-4">
               <p className="text-sm text-muted-foreground">
-                Once she logs how she's feeling, you'll see a summary here.
+                {momName 
+                  ? `Once ${momName} logs how she's feeling, you'll see a summary here.`
+                  : "Once she logs how she's feeling, you'll see a summary here."
+                }
               </p>
             </div>
           )}
