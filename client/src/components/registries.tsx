@@ -30,7 +30,11 @@ import {
   type Registry,
 } from "@/lib/registryStorage";
 
-export function Registries() {
+interface RegistriesProps {
+  isReadOnly?: boolean;
+}
+
+export function Registries({ isReadOnly = false }: RegistriesProps) {
   const [registries, setRegistries] = useState<Registry[]>([]);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -92,59 +96,67 @@ export function Registries() {
               Registries
             </h2>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              Keep your baby registries in one place.
+              {isReadOnly 
+                ? "View baby registry links"
+                : "Keep your baby registries in one place."
+              }
             </p>
           </div>
         </div>
 
-        <Sheet open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <SheetTrigger asChild>
-            <Button size="sm" variant="outline" className="gap-1.5">
-              <Plus className="w-4 h-4" />
-              Add
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="bottom" className="rounded-t-2xl">
-            <SheetHeader className="text-left pb-4">
-              <SheetTitle>Add Registry</SheetTitle>
-            </SheetHeader>
-
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Registry Name</label>
-                <Input
-                  placeholder="e.g., Amazon, Target, Babylist"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-medium">URL</label>
-                <Input
-                  placeholder="https://..."
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  type="url"
-                />
-              </div>
-
-              {error && (
-                <p className="text-sm text-destructive">{error}</p>
-              )}
-
-              <Button onClick={handleAdd} className="w-full">
-                Add Registry
+        {/* Add button - hidden for read-only */}
+        {!isReadOnly && (
+          <Sheet open={isAddOpen} onOpenChange={setIsAddOpen}>
+            <SheetTrigger asChild>
+              <Button size="sm" variant="outline" className="gap-1.5">
+                <Plus className="w-4 h-4" />
+                Add
               </Button>
-            </div>
-          </SheetContent>
-        </Sheet>
+            </SheetTrigger>
+            <SheetContent side="bottom" className="rounded-t-2xl">
+              <SheetHeader className="text-left pb-4">
+                <SheetTitle>Add Registry</SheetTitle>
+              </SheetHeader>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Registry Name</label>
+                  <Input
+                    placeholder="e.g., Amazon, Target, Babylist"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">URL</label>
+                  <Input
+                    placeholder="https://..."
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    type="url"
+                  />
+                </div>
+
+                {error && (
+                  <p className="text-sm text-destructive">{error}</p>
+                )}
+
+                <Button onClick={handleAdd} className="w-full">
+                  Add Registry
+                </Button>
+              </div>
+            </SheetContent>
+          </Sheet>
+        )}
       </div>
 
       {registries.length === 0 ? (
         <div className="text-center py-6 text-muted-foreground">
           <p className="text-sm">No registries added yet.</p>
-          <p className="text-xs mt-1">Tap "Add" to save your first registry link.</p>
+          {!isReadOnly && (
+            <p className="text-xs mt-1">Tap "Add" to save your first registry link.</p>
+          )}
         </div>
       ) : (
         <div className="space-y-2">
@@ -169,35 +181,41 @@ export function Registries() {
                 </div>
               </button>
 
-              <button
-                type="button"
-                onClick={() => setDeleteId(registry.id)}
-                className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
-                title="Delete registry"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+              {/* Delete button - hidden for read-only */}
+              {!isReadOnly && (
+                <button
+                  type="button"
+                  onClick={() => setDeleteId(registry.id)}
+                  className="p-2 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
+                  title="Delete registry"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
             </div>
           ))}
         </div>
       )}
 
-      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Registry?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will remove the registry link from your list. You can always add it again later.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* Delete dialog - only needed for non-read-only */}
+      {!isReadOnly && (
+        <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Registry?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will remove the registry link from your list. You can always add it again later.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </section>
   );
 }

@@ -1,6 +1,9 @@
+// client/src/pages/appointments.tsx
+
 import { useEffect, useState } from "react";
 import { Layout } from "@/components/layout";
 import { usePregnancyState } from "@/hooks/usePregnancyState";
+import { usePartnerAccess } from "@/contexts/PartnerContext";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -14,6 +17,7 @@ import {
   Clock,
   Trash2,
   Plus,
+  Eye,
 } from "lucide-react";
 
 type Appointment = {
@@ -27,6 +31,7 @@ type Appointment = {
 export default function AppointmentsPage() {
   const { user } = useAuth();
   const { dueDate, setDueDate } = usePregnancyState();
+  const { isPartnerView, momName } = usePartnerAccess();
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [title, setTitle] = useState("");
@@ -41,7 +46,6 @@ export default function AppointmentsPage() {
   useEffect(() => {
     async function load() {
       if (!user) {
-        // user logged out; clear any cached UI data
         setAppointments([]);
         setErrorMsg(null);
         setLoading(false);
@@ -51,17 +55,17 @@ export default function AppointmentsPage() {
       setLoading(true);
       setErrorMsg(null);
 
+      // For partners, the RLS policy will return appointments they have access to
       const { data, error } = await supabase
         .from("pregnancy_appointments")
         .select("id, title, starts_at, location, notes")
-        .eq("user_id", user.id) // ✅ SAFETY: only this user's rows
         .order("starts_at", { ascending: true });
 
       setLoading(false);
 
       if (error) {
         console.error(error);
-        setErrorMsg("Couldn’t load your appointments. Please try again.");
+        setErrorMsg("Couldn't load appointments. Please try again.");
         return;
       }
 
@@ -73,7 +77,7 @@ export default function AppointmentsPage() {
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
-    if (!user) return;
+    if (!user || isPartnerView) return;
 
     if (!title.trim() || !startsAt) {
       setErrorMsg("Please add a title and date/time.");
@@ -100,20 +104,19 @@ export default function AppointmentsPage() {
 
     if (error) {
       console.error(error);
-      setErrorMsg("Couldn’t save your appointment. Please try again.");
+      setErrorMsg("Couldn't save your appointment. Please try again.");
       return;
     }
 
-    // Reload list (simple + consistent)
+    // Reload list
     const { data: refreshed, error: refreshError } = await supabase
       .from("pregnancy_appointments")
       .select("id, title, starts_at, location, notes")
-      .eq("user_id", user.id) // ✅ SAFETY
       .order("starts_at", { ascending: true });
 
     if (refreshError) {
       console.error(refreshError);
-      setErrorMsg("Saved, but couldn’t refresh the list.");
+      setErrorMsg("Saved, but couldn't refresh the list.");
       return;
     }
 
@@ -125,18 +128,18 @@ export default function AppointmentsPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!user) return;
+    if (!user || isPartnerView) return;
     if (!window.confirm("Remove this appointment?")) return;
 
     const { error } = await supabase
       .from("pregnancy_appointments")
       .delete()
       .eq("id", id)
-      .eq("user_id", user.id); // ✅ SAFETY: only delete your own
+      .eq("user_id", user.id);
 
     if (error) {
       console.error(error);
-      setErrorMsg("Couldn’t delete that appointment.");
+      setErrorMsg("Couldn't delete that appointment.");
       return;
     }
 
@@ -154,77 +157,92 @@ export default function AppointmentsPage() {
     <Layout dueDate={dueDate} setDueDate={setDueDate}>
       <div className="max-w-3xl mx-auto space-y-8 pb-10">
         <header className="space-y-2">
-          <h1 className="font-serif text-3xl font-bold tracking-tight">
-            Appointments
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="font-serif text-3xl font-bold tracking-tight">
+              Appointments
+            </h1>
+            {isPartnerView && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-xs text-muted-foreground">
+                <Eye className="w-3 h-3" />
+                View only
+              </span>
+            )}
+          </div>
           <p className="text-muted-foreground">
-            Keep track of your prenatal visits and important check-ins.
+            {isPartnerView 
+              ? `View ${momName ? `${momName}'s` : "upcoming"} prenatal visits and important dates.`
+              : "Keep track of your prenatal visits and important check-ins."
+            }
           </p>
         </header>
 
-        <section className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-          <div className="bg-muted/30 px-6 py-4 border-b border-border flex items-center gap-2">
-            <CalendarIcon className="h-5 w-5" />
-            <div>
-              <h2 className="text-lg font-semibold">Add appointment</h2>
-              <p className="text-sm text-muted-foreground">
-                Add upcoming dates and notes for your visits.
-              </p>
-            </div>
-          </div>
-
-          <form onSubmit={handleAdd} className="p-6 grid gap-4">
-            {errorMsg && (
-              <div className="text-sm text-destructive">{errorMsg}</div>
-            )}
-
-            <div className="grid gap-2">
-              <label className="text-sm font-medium">Title</label>
-              <Input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Ultrasound"
-              />
+        {/* Add form - hidden for partners */}
+        {!isPartnerView && (
+          <section className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-muted/30 px-6 py-4 border-b border-border flex items-center gap-2">
+              <CalendarIcon className="h-5 w-5" />
+              <div>
+                <h2 className="text-lg font-semibold">Add appointment</h2>
+                <p className="text-sm text-muted-foreground">
+                  Add upcoming dates and notes for your visits.
+                </p>
+              </div>
             </div>
 
-            <div className="grid gap-2">
-              <label className="text-sm font-medium">Date & time</label>
-              <Input
-                type="datetime-local"
-                value={startsAt}
-                onChange={(e) => setStartsAt(e.target.value)}
-              />
-            </div>
+            <form onSubmit={handleAdd} className="p-6 grid gap-4">
+              {errorMsg && (
+                <div className="text-sm text-destructive">{errorMsg}</div>
+              )}
 
-            <div className="grid gap-2">
-              <label className="text-sm font-medium flex items-center gap-2">
-                <MapPin className="h-4 w-4" /> Location (optional)
-              </label>
-              <Input
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="Clinic / hospital"
-              />
-            </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium">Title</label>
+                <Input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Ultrasound"
+                />
+              </div>
 
-            <div className="grid gap-2">
-              <label className="text-sm font-medium">Notes (optional)</label>
-              <Textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Questions to ask, what to bring, etc."
-              />
-            </div>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium">Date & time</label>
+                <Input
+                  type="datetime-local"
+                  value={startsAt}
+                  onChange={(e) => setStartsAt(e.target.value)}
+                />
+              </div>
 
-            <div className="flex justify-end">
-              <Button type="submit" disabled={isSaving}>
-                <Plus className="mr-2 h-4 w-4" />
-                {isSaving ? "Saving..." : "Add"}
-              </Button>
-            </div>
-          </form>
-        </section>
+              <div className="grid gap-2">
+                <label className="text-sm font-medium flex items-center gap-2">
+                  <MapPin className="h-4 w-4" /> Location (optional)
+                </label>
+                <Input
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="Clinic / hospital"
+                />
+              </div>
 
+              <div className="grid gap-2">
+                <label className="text-sm font-medium">Notes (optional)</label>
+                <Textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Questions to ask, what to bring, etc."
+                />
+              </div>
+
+              <div className="flex justify-end">
+                <Button type="submit" disabled={isSaving}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  {isSaving ? "Saving..." : "Add"}
+                </Button>
+              </div>
+            </form>
+          </section>
+        )}
+
+        {/* Upcoming appointments */}
         <section className="space-y-4">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <Clock className="h-5 w-5" />
@@ -252,31 +270,37 @@ export default function AppointmentsPage() {
                       {format(new Date(a.starts_at), "PPP 'at' p")}
                     </div>
                     {a.location && (
-                      <div className="text-sm text-muted-foreground">
+                      <div className="text-sm text-muted-foreground flex items-center gap-1">
+                        <MapPin className="w-3 h-3" />
                         {a.location}
                       </div>
                     )}
-                    {a.notes && (
+                    {/* Notes hidden for partners (may contain private medical info) */}
+                    {!isPartnerView && a.notes && (
                       <div className="text-sm text-muted-foreground">
                         {a.notes}
                       </div>
                     )}
                   </div>
 
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDelete(a.id)}
-                    aria-label="Delete appointment"
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
+                  {/* Delete button - hidden for partners */}
+                  {!isPartnerView && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDelete(a.id)}
+                      aria-label="Delete appointment"
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>
           )}
         </section>
 
+        {/* Past appointments */}
         <section className="space-y-4">
           <h2 className="text-lg font-semibold">Past</h2>
 
@@ -299,25 +323,30 @@ export default function AppointmentsPage() {
                       {format(new Date(a.starts_at), "PPP 'at' p")}
                     </div>
                     {a.location && (
-                      <div className="text-sm text-muted-foreground">
+                      <div className="text-sm text-muted-foreground flex items-center gap-1">
+                        <MapPin className="w-3 h-3" />
                         {a.location}
                       </div>
                     )}
-                    {a.notes && (
+                    {/* Notes hidden for partners */}
+                    {!isPartnerView && a.notes && (
                       <div className="text-sm text-muted-foreground">
                         {a.notes}
                       </div>
                     )}
                   </div>
 
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDelete(a.id)}
-                    aria-label="Delete appointment"
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
+                  {/* Delete button - hidden for partners */}
+                  {!isPartnerView && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDelete(a.id)}
+                      aria-label="Delete appointment"
+                    >
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>

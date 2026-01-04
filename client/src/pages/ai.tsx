@@ -6,8 +6,9 @@ import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { usePregnancyState } from "@/hooks/usePregnancyState";
+import { usePartnerAccess } from "@/contexts/PartnerContext";
 import { supabase } from "@/lib/supabase";
-import { Loader2, Sparkles, Info } from "lucide-react";
+import { Loader2, Sparkles, Info, Lock } from "lucide-react";
 import {
   canAskAi,
   incrementAiCount,
@@ -16,7 +17,8 @@ import {
 } from "@/lib/aiLimits";
 
 export default function AiPage() {
-  const { dueDate, setDueDate, currentWeek } = usePregnancyState();
+  const { dueDate, setDueDate, currentWeek, momName } = usePregnancyState();
+  const { isPartnerView } = usePartnerAccess();
   const searchString = useSearch();
   
   const params = new URLSearchParams(searchString);
@@ -35,6 +37,8 @@ export default function AiPage() {
   const [remaining, setRemaining] = useState(() => getRemainingAiQuestions(isPaid));
 
   useEffect(() => {
+    if (isPartnerView) return; // Don't prefill for partners
+    
     if (prefillMood || prefillSymptoms) {
       const parts: string[] = [];
       parts.push(`I'm currently in week ${prefillWeek} of my pregnancy.`);
@@ -48,7 +52,31 @@ export default function AiPage() {
       parts.push("\nIs this normal? What can I try today? When should I contact my provider?");
       setQuestion(parts.join(" "));
     }
-  }, [prefillMood, prefillSymptoms, prefillSlot, prefillNotes, prefillWeek]);
+  }, [prefillMood, prefillSymptoms, prefillSlot, prefillNotes, prefillWeek, isPartnerView]);
+
+  // Block partner access
+  if (isPartnerView) {
+    return (
+      <Layout dueDate={dueDate} setDueDate={setDueDate}>
+        <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <section className="text-center py-16">
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-muted mb-6">
+              <Lock className="w-10 h-10 text-muted-foreground" />
+            </div>
+            <h1 className="font-serif text-3xl font-bold mb-3">
+              FLO is for {momName || "Mom"}
+            </h1>
+            <p className="text-muted-foreground text-lg max-w-md mx-auto">
+              FLO provides personalized pregnancy support and is only available to {momName || "the expecting parent"}.
+            </p>
+            <p className="text-sm text-muted-foreground mt-4">
+              Check out the home page for ways you can support this week.
+            </p>
+          </section>
+        </div>
+      </Layout>
+    );
+  }
 
   async function handleAsk(e: React.FormEvent) {
     e.preventDefault();

@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 interface WeeklySummaryProps {
   isPaid?: boolean;
   checkinContext?: CheckinContext | null;
+  isPartnerView?: boolean;
 }
 
 type Mood = "happy" | "neutral" | "sad";
@@ -123,29 +124,29 @@ function getEnergyLabel(energy: Energy): string {
   return energy === "high" ? "high energy" : energy === "medium" ? "moderate energy" : "lower energy";
 }
 
-const slotIcons: Record<Slot, React.ReactNode> = {
-  morning: <Sun className="w-4 h-4" />,
-  evening: <Sunset className="w-4 h-4" />,
-  night: <Moon className="w-4 h-4" />,
-};
-
 const moodIcons: Record<Mood, React.ReactNode> = {
   happy: <Smile className="w-4 h-4 text-green-600 dark:text-green-400" />,
   neutral: <Meh className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />,
   sad: <Frown className="w-4 h-4 text-red-600 dark:text-red-400" />,
 };
 
-export function WeeklySummary({ isPaid = false, checkinContext = null }: WeeklySummaryProps) {
+export function WeeklySummary({ 
+  isPaid = false, 
+  checkinContext = null,
+  isPartnerView = false 
+}: WeeklySummaryProps) {
   const { data: weekLogs = [], isLoading } = useWeekLogs();
   const stats = useMemo(() => analyzeWeekLogs(weekLogs), [weekLogs]);
 
-  // Nudge state
+  // Nudge state - only for mom view
   const [nudgeCompleted, setNudgeCompleted] = useState(false);
   const nudge = getNudgeForCheckin(checkinContext);
 
   useEffect(() => {
-    setNudgeCompleted(isNudgeCompleted());
-  }, []);
+    if (!isPartnerView) {
+      setNudgeCompleted(isNudgeCompleted());
+    }
+  }, [isPartnerView]);
 
   function handleNudgeToggle(checked: boolean) {
     if (checked) {
@@ -154,43 +155,79 @@ export function WeeklySummary({ isPaid = false, checkinContext = null }: WeeklyS
     }
   }
 
-  // Build summary text
+  // Build summary text - simplified for partner
   const summaryParts: string[] = [];
   if (stats.dominantMood) {
     const moodText = getMoodLabel(stats.dominantMood);
-    summaryParts.push(`You've been feeling mostly ${moodText} this week`);
+    summaryParts.push(`Feeling mostly ${moodText} this week`);
   }
-  if (stats.topSymptoms.length > 0) {
+  // Only show symptoms to mom
+  if (!isPartnerView && stats.topSymptoms.length > 0) {
     const symptomsText = stats.topSymptoms.join(", ").toLowerCase();
     summaryParts.push(`with ${symptomsText} showing up most often`);
   }
-  if (stats.challengingSlot && isPaid) {
-    const slotLabel = stats.challengingSlot === "morning" ? "mornings" : stats.challengingSlot === "evening" ? "evenings" : "nights";
-    summaryParts.push(`${slotLabel} tend to be tougher`);
-  }
-  if (stats.hasEnergyData && stats.dominantEnergy && isPaid) {
-    summaryParts.push(`Overall ${getEnergyLabel(stats.dominantEnergy)}`);
-  }
 
-  const freeRecap = summaryParts.slice(0, 2).join(", ") + ".";
-  
-  let paidSuggestion = "";
-  if (isPaid) {
-    if (stats.challengingSlot === "morning" && stats.dominantEnergy === "low") {
-      paidSuggestion = "Consider a gentler morning routine or going to bed earlier.";
-    } else if (stats.challengingSlot === "evening") {
-      paidSuggestion = "Evening rest breaks might help — even 10 minutes can make a difference.";
-    } else if (stats.challengingSlot === "night") {
-      paidSuggestion = "Nights can be tough. A wind-down routine before bed might help.";
-    } else if (stats.topSymptoms.map(s => s.toLowerCase()).includes("fatigue")) {
-      paidSuggestion = "Fatigue is common. Small, frequent meals and staying hydrated can help.";
-    } else {
-      paidSuggestion = "Keep listening to your body — you're doing great.";
-    }
-  }
+  const freeRecap = summaryParts.length > 0 
+    ? summaryParts.join(", ") + "."
+    : "No check-ins recorded this week yet.";
 
   const hasWeekData = !isLoading && stats.totalCheckins > 0;
 
+  // Partner view: simplified card
+  if (isPartnerView) {
+    return (
+      <section className="bg-card rounded-xl p-6 border border-border shadow-sm">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+            <BarChart3 className="w-4 h-4 text-primary" />
+          </div>
+          <div>
+            <h2 className="font-medium text-sm">Week at a Glance</h2>
+            <p className="text-xs text-muted-foreground">
+              {hasWeekData 
+                ? `${stats.totalCheckins} check-in${stats.totalCheckins !== 1 ? "s" : ""} this week`
+                : "Waiting for check-ins"
+              }
+            </p>
+          </div>
+        </div>
+
+        {hasWeekData && (
+          <>
+            {/* Summary Text - mood only, no symptoms for partner */}
+            <p className="text-sm text-foreground leading-relaxed mb-4">
+              {freeRecap}
+            </p>
+
+            {/* Visual Stats Row - mood only for partner */}
+            <div className="flex gap-3">
+              {/* Mood Distribution */}
+              <div className="flex-1 bg-muted/50 rounded-lg p-3">
+                <div className="text-xs text-muted-foreground mb-2">Mood this week</div>
+                <div className="flex items-center gap-2">
+                  {(["happy", "neutral", "sad"] as Mood[]).map((mood) => (
+                    <div key={mood} className="flex items-center gap-1">
+                      {moodIcons[mood]}
+                      <span className="text-xs font-medium">{stats.moodCounts[mood]}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {!hasWeekData && !isLoading && (
+          <p className="text-sm text-muted-foreground">
+            Check back later to see how the week is going.
+          </p>
+        )}
+      </section>
+    );
+  }
+
+  // Mom view: full card with nudge and all details
   return (
     <section className="bg-card rounded-xl p-6 border border-border shadow-sm">
       {/* Today's Gentle Nudge */}
@@ -290,7 +327,7 @@ export function WeeklySummary({ isPaid = false, checkinContext = null }: WeeklyS
           {/* Challenging Time (Paid only) */}
           {isPaid && stats.challengingSlot && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground mb-4 bg-muted/30 rounded-lg px-3 py-2">
-              {slotIcons[stats.challengingSlot]}
+              <Sun className="w-4 h-4" />
               <span>
                 {stats.challengingSlot.charAt(0).toUpperCase() + stats.challengingSlot.slice(1)}s tend to be your tougher time
               </span>
@@ -298,10 +335,10 @@ export function WeeklySummary({ isPaid = false, checkinContext = null }: WeeklyS
           )}
 
           {/* Paid Suggestion */}
-          {isPaid && paidSuggestion && (
+          {isPaid && (
             <div className="flex items-start gap-2 text-sm bg-primary/5 border border-primary/10 rounded-lg px-3 py-2">
               <TrendingUp className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-              <p className="text-foreground">{paidSuggestion}</p>
+              <p className="text-foreground">Keep listening to your body — you're doing great.</p>
             </div>
           )}
 

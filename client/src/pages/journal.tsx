@@ -1,6 +1,9 @@
+// client/src/pages/journal.tsx
+
 import { Layout } from "@/components/layout";
 import { usePregnancyState } from "@/hooks/usePregnancyState";
 import { usePregnancyLogs } from "@/hooks/usePregnancyLogs";
+import { usePartnerAccess } from "@/contexts/PartnerContext";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
 import { motion } from "framer-motion";
@@ -12,12 +15,41 @@ import {
   Loader2,
   Calendar,
   Clock,
+  Lock,
 } from "lucide-react";
 import type { PregnancyLog } from "@shared/schema";
 
 function Journal() {
-  const { dueDate, setDueDate } = usePregnancyState();
+  const { dueDate, setDueDate, momName } = usePregnancyState();
   const { data: logs, isLoading, error } = usePregnancyLogs();
+  const { isPartnerView } = usePartnerAccess();
+
+  // Block partner access to journal
+  if (isPartnerView) {
+    return (
+      <Layout dueDate={dueDate} setDueDate={setDueDate}>
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+          <section className="text-center py-16">
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-muted mb-6">
+              <Lock className="w-10 h-10 text-muted-foreground" />
+            </div>
+            <h1 className="font-serif text-3xl md:text-4xl font-bold mb-3">
+              Journal is Private
+            </h1>
+            <p className="text-muted-foreground text-lg max-w-md mx-auto">
+              {momName 
+                ? `${momName}'s journal entries are personal and only visible to them.`
+                : "Journal entries are personal and only visible to the mom."
+              }
+            </p>
+            <p className="text-sm text-muted-foreground mt-4">
+              Check out the home page for ways you can support this week.
+            </p>
+          </section>
+        </div>
+      </Layout>
+    );
+  }
 
   // Group logs by week for better organization
   const groupedByWeek =

@@ -4,15 +4,24 @@ import { useEffect, useState } from "react";
 import { Layout } from "@/components/layout";
 import { useAuth } from "@/hooks/useAuth";
 import { usePregnancyState, type BabySex } from "@/hooks/usePregnancyState";
+import { usePartnerAccess } from "@/contexts/PartnerContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/lib/supabase";
 import { cn } from "@/lib/utils";
 import { format, differenceInDays } from "date-fns";
-import { Loader2, Save, Trash2, AlertTriangle, Sun, Moon, Monitor, Bell } from "lucide-react";
+import { 
+  Loader2, Save, Trash2, AlertTriangle, Sun, Moon, Monitor, Bell, 
+  Users, Copy, Check, Link2 
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme, type ThemeMode } from "@/theme/theme-provider";
+import {
+  generateInviteToken,
+  hashToken,
+  buildInviteUrl,
+} from "@/lib/partnerInvite";
 import {
   isNotificationsSupported,
   isNightReminderEnabled,
@@ -32,15 +41,16 @@ function parseLocalDate(dateString: string): Date | null {
 }
 
 export default function SettingsPage() {
-  const { user, deleteAccount } = useAuth();
+  const { user, signOut, deleteAccount } = useAuth();
   const { toast } = useToast();
   const { mode, setMode } = useTheme();
+  const { isPartnerView, momName, hasActivePartner, refreshPartnerAccess } = usePartnerAccess();
 
   const {
     dueDate, setDueDate,
     babyName, setBabyName,
     babySex, setBabySex,
-    momName, setMomName,
+    momName: profileMomName, setMomName,
     partnerName, setPartnerName,
   } = usePregnancyState();
 
@@ -52,6 +62,13 @@ export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmText, setConfirmText] = useState("");
+
+  // Partner invite state
+  // We store the RAW token in state (for display) but only the HASH goes to DB
+  const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [hasExistingInvite, setHasExistingInvite] = useState(false);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [copiedInvite, setCopiedInvite] = useState(false);
 
   // Notification state
   const [nightReminderEnabled, setNightReminderEnabled] = useState(false);
@@ -81,9 +98,28 @@ export default function SettingsPage() {
     setNameInput(babyName ?? "");
     setDateInput(dueDate ? format(dueDate, "yyyy-MM-dd") : "");
     setSexInput(babySex && babySex !== "unknown" ? (babySex as "boy" | "girl") : null);
-    setMomInput(momName ?? "");
+    setMomInput(profileMomName ?? "");
     setPartnerInput(partnerName ?? "");
-  }, [babyName, dueDate, babySex, momName, partnerName]);
+  }, [babyName, dueDate, babySex, profileMomName, partnerName]);
+
+  // Check if mom has an existing (non-revoked) invite
+  useEffect(() => {
+    if (isPartnerView || !user) return;
+
+    async function checkExistingInvite() {
+      const { data } = await supabase
+        .from("partner_access")
+        .select("id")
+        .eq("mom_user_id", user.id)
+        .is("revoked_at", null)
+        .limit(1)
+        .single();
+
+      setHasExistingInvite(!!data);
+    }
+
+    checkExistingInvite();
+  }, [user, isPartnerView]);
 
   async function handleNightReminderToggle(enabled: boolean) {
     setTogglingNight(true);
@@ -152,7 +188,7 @@ export default function SettingsPage() {
   }
 
   async function handleSaveChanges() {
-    if (!user) return;
+    if (!user || isPartnerView) return;
     setIsSaving(true);
     const sexToSave: BabySex = sexInput ?? "unknown";
     const parsedDueDate = parseLocalDate(dateInput);
@@ -195,6 +231,74 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleCreateInvite() {
+    if (!user || isPartnerView) return;
+    setInviteLoading(true);
+
+    try {
+      // Generate a secure random token
+      const token = generateInviteToken();
+      
+      // Hash it - only the hash goes to the database
+      const tokenHash = await hashToken(token);
+
+      const { error } = await supabase
+        .from("partner_access")
+        .insert({
+          mom_user_id: user.id,
+          invite_token_hash: tokenHash,
+        });
+
+      if (error) throw error;
+
+      // Store the raw token in state for display (never saved to DB)
+      setInviteToken(token);
+      setHasExistingInvite(true);
+      toast({ title: "Invite created", description: "Share this link with your partner." });
+    } catch (err) {
+      console.error(err);
+      toast({ variant: "destructive", title: "Error", description: "Couldn't create invite." });
+    } finally {
+      setInviteLoading(false);
+    }
+  }
+
+  async function handleRevokeAccess() {
+    if (!user || isPartnerView) return;
+    if (!window.confirm("This will remove your partner's access. Are you sure?")) return;
+
+    setInviteLoading(true);
+    try {
+      // Revoke ALL active invites for this mom
+      const { error } = await supabase
+        .from("partner_access")
+        .update({ revoked_at: new Date().toISOString() })
+        .eq("mom_user_id", user.id)
+        .is("revoked_at", null);
+
+      if (error) throw error;
+
+      setInviteToken(null);
+      setHasExistingInvite(false);
+      await refreshPartnerAccess();
+      toast({ title: "Access revoked", description: "Your partner no longer has access." });
+    } catch (err) {
+      console.error(err);
+      toast({ variant: "destructive", title: "Error", description: "Couldn't revoke access." });
+    } finally {
+      setInviteLoading(false);
+    }
+  }
+
+  function handleCopyInvite() {
+    if (!inviteToken) return;
+    const inviteUrl = buildInviteUrl(inviteToken);
+    navigator.clipboard.writeText(inviteUrl);
+    setCopiedInvite(true);
+    setTimeout(() => setCopiedInvite(false), 2000);
+    toast({ title: "Link copied", description: "Share this link with your partner." });
+  }
+
   async function handleDeleteAccount() {
     if (confirmText !== "DELETE" || !user) return;
     try {
@@ -218,7 +322,12 @@ export default function SettingsPage() {
       <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
         <header className="space-y-2">
           <h1 className="font-serif text-3xl font-bold tracking-tight">Settings</h1>
-          <p className="text-muted-foreground">Manage your pregnancy details and account preferences.</p>
+          <p className="text-muted-foreground">
+            {isPartnerView 
+              ? "Manage your account preferences."
+              : "Manage your pregnancy details and account preferences."
+            }
+          </p>
         </header>
 
         {/* Appearance */}
@@ -249,7 +358,7 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* Notifications */}
+        {/* Notifications - available for both mom and partner */}
         <section className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
           <div className="bg-muted/30 px-6 py-4 border-b border-border">
             <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -262,9 +371,16 @@ export default function SettingsPage() {
             {/* Morning Guidance */}
             <div className="flex items-center justify-between">
               <div className="space-y-1">
-                <label className="text-sm font-medium">Morning guidance</label>
+                <label className="text-sm font-medium">
+                  {isPartnerView ? "Appointment reminders" : "Morning guidance"}
+                </label>
                 <p className="text-xs text-muted-foreground">
-                  {notificationsAvailable ? "A gentle message at 8:30am to start your day" : "Available on iOS and Android apps"}
+                  {notificationsAvailable 
+                    ? isPartnerView 
+                      ? "Get reminded about upcoming appointments"
+                      : "A gentle message at 8:30am to start your day" 
+                    : "Available on iOS and Android apps"
+                  }
                 </p>
               </div>
               <Switch
@@ -274,20 +390,22 @@ export default function SettingsPage() {
               />
             </div>
 
-            {/* Evening Reminder */}
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Evening check-in reminder</label>
-                <p className="text-xs text-muted-foreground">
-                  {notificationsAvailable ? "A gentle reminder at 8:30pm to check in" : "Available on iOS and Android apps"}
-                </p>
+            {/* Evening Reminder - only for mom */}
+            {!isPartnerView && (
+              <div className="flex items-center justify-between">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Evening check-in reminder</label>
+                  <p className="text-xs text-muted-foreground">
+                    {notificationsAvailable ? "A gentle reminder at 8:30pm to check in" : "Available on iOS and Android apps"}
+                  </p>
+                </div>
+                <Switch
+                  checked={nightReminderEnabled}
+                  onCheckedChange={handleNightReminderToggle}
+                  disabled={!notificationsAvailable || togglingNight}
+                />
               </div>
-              <Switch
-                checked={nightReminderEnabled}
-                onCheckedChange={handleNightReminderToggle}
-                disabled={!notificationsAvailable || togglingNight}
-              />
-            </div>
+            )}
 
             {!permissionGranted && notificationsAvailable && (
               <p className="text-xs text-amber-600 dark:text-amber-400">
@@ -297,73 +415,213 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* Pregnancy Details */}
-        <section className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-          <div className="bg-muted/30 px-6 py-4 border-b border-border">
-            <h2 className="text-lg font-semibold">Pregnancy Details</h2>
-            <p className="text-sm text-muted-foreground">Update your info to recalculate your timeline.</p>
-          </div>
-          <div className="p-6 grid gap-6">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Baby&apos;s Name</label>
-              <Input value={nameInput} onChange={(e) => setNameInput(e.target.value)} placeholder="e.g. Oliver" />
+        {/* Partner Access - only for mom */}
+        {!isPartnerView && (
+          <section className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-muted/30 px-6 py-4 border-b border-border">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                Partner Access
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Invite your partner to view your pregnancy journey.
+              </p>
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Due Date</label>
-              <Input type="date" value={dateInput} onChange={(e) => setDateInput(e.target.value)} />
+            <div className="p-6 space-y-4">
+              {inviteToken ? (
+                // Just created an invite - show the link
+                <>
+                  <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                    <Link2 className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-green-800 dark:text-green-200">Invite link ready!</p>
+                      <p className="text-xs text-green-600 dark:text-green-400 truncate">
+                        {buildInviteUrl(inviteToken)}
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCopyInvite}
+                      className="shrink-0"
+                    >
+                      {copiedInvite ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                    </Button>
+                  </div>
+
+                  <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                    <p className="text-xs text-amber-800 dark:text-amber-200">
+                      <strong>Important:</strong> Copy this link now. For security, you won't be able to see it again.
+                    </p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCopyInvite}
+                      className="flex-1"
+                    >
+                      {copiedInvite ? "Copied!" : "Copy invite link"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleRevokeAccess}
+                      disabled={inviteLoading}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      Revoke
+                    </Button>
+                  </div>
+                </>
+              ) : hasExistingInvite || hasActivePartner ? (
+                // Has an existing invite (but we don't have the token) or active partner
+                <>
+                  <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border">
+                    <Users className="w-5 h-5 text-muted-foreground shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">
+                        {hasActivePartner ? "Partner connected" : "Invite pending"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {hasActivePartner 
+                          ? "Your partner can view your pregnancy updates."
+                          : "Waiting for your partner to accept the invite."
+                        }
+                      </p>
+                    </div>
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRevokeAccess}
+                    disabled={inviteLoading}
+                    className="w-full text-destructive hover:text-destructive"
+                  >
+                    {inviteLoading ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Revoking...</>
+                    ) : (
+                      "Revoke partner access"
+                    )}
+                  </Button>
+                </>
+              ) : (
+                // No invite yet
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Your partner will be able to see your baby's progress, upcoming appointments, and ways they can support you. They won't see your journal entries, symptoms, or private notes.
+                  </p>
+                  <Button
+                    onClick={handleCreateInvite}
+                    disabled={inviteLoading}
+                    className="w-full"
+                  >
+                    {inviteLoading ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Creating...</>
+                    ) : (
+                      <><Users className="w-4 h-4 mr-2" />Create partner invite</>
+                    )}
+                  </Button>
+                </>
+              )}
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Baby&apos;s Sex</label>
-              <div className="flex gap-4">
-                <label
-                  className={cn(
-                    "flex-1 flex items-center justify-center gap-2 cursor-pointer border rounded-md px-4 py-3 transition-all",
-                    sexInput === "boy"
-                      ? "bg-blue-50 border-blue-200 text-blue-700 ring-1 ring-blue-200 dark:bg-blue-950 dark:border-blue-800 dark:text-blue-300"
-                      : "hover:bg-muted"
-                  )}
-                >
-                  <input type="radio" name="sex" checked={sexInput === "boy"} onChange={() => setSexInput("boy")} className="sr-only" />
-                  <span>Boy</span>
-                </label>
-                <label
-                  className={cn(
-                    "flex-1 flex items-center justify-center gap-2 cursor-pointer border rounded-md px-4 py-3 transition-all",
-                    sexInput === "girl"
-                      ? "bg-pink-50 border-pink-200 text-pink-700 ring-1 ring-pink-200 dark:bg-pink-950 dark:border-pink-800 dark:text-pink-300"
-                      : "hover:bg-muted"
-                  )}
-                >
-                  <input type="radio" name="sex" checked={sexInput === "girl"} onChange={() => setSexInput("girl")} className="sr-only" />
-                  <span>Girl</span>
-                </label>
+          </section>
+        )}
+
+        {/* Pregnancy Details - only for mom */}
+        {!isPartnerView && (
+          <section className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-muted/30 px-6 py-4 border-b border-border">
+              <h2 className="text-lg font-semibold">Pregnancy Details</h2>
+              <p className="text-sm text-muted-foreground">Update your info to recalculate your timeline.</p>
+            </div>
+            <div className="p-6 grid gap-6">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Baby&apos;s Name</label>
+                <Input value={nameInput} onChange={(e) => setNameInput(e.target.value)} placeholder="e.g. Oliver" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Due Date</label>
+                <Input type="date" value={dateInput} onChange={(e) => setDateInput(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Baby&apos;s Sex</label>
+                <div className="flex gap-4">
+                  <label
+                    className={cn(
+                      "flex-1 flex items-center justify-center gap-2 cursor-pointer border rounded-md px-4 py-3 transition-all",
+                      sexInput === "boy"
+                        ? "bg-blue-50 border-blue-200 text-blue-700 ring-1 ring-blue-200 dark:bg-blue-950 dark:border-blue-800 dark:text-blue-300"
+                        : "hover:bg-muted"
+                    )}
+                  >
+                    <input type="radio" name="sex" checked={sexInput === "boy"} onChange={() => setSexInput("boy")} className="sr-only" />
+                    <span>Boy</span>
+                  </label>
+                  <label
+                    className={cn(
+                      "flex-1 flex items-center justify-center gap-2 cursor-pointer border rounded-md px-4 py-3 transition-all",
+                      sexInput === "girl"
+                        ? "bg-pink-50 border-pink-200 text-pink-700 ring-1 ring-pink-200 dark:bg-pink-950 dark:border-pink-800 dark:text-pink-300"
+                        : "hover:bg-muted"
+                    )}
+                  >
+                    <input type="radio" name="sex" checked={sexInput === "girl"} onChange={() => setSexInput("girl")} className="sr-only" />
+                    <span>Girl</span>
+                  </label>
+                </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
-        {/* Parent Names */}
-        <section className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-          <div className="bg-muted/30 px-6 py-4 border-b border-border">
-            <h2 className="text-lg font-semibold">Parents</h2>
-            <p className="text-sm text-muted-foreground">Optional. Displayed on your home screen.</p>
-          </div>
-          <div className="p-6 grid gap-6">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Mom&apos;s Name</label>
-              <Input value={momInput} onChange={(e) => setMomInput(e.target.value)} placeholder="e.g. Sarah" />
+        {/* Parent Names - only for mom */}
+        {!isPartnerView && (
+          <section className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-muted/30 px-6 py-4 border-b border-border">
+              <h2 className="text-lg font-semibold">Parents</h2>
+              <p className="text-sm text-muted-foreground">Optional. Displayed on your home screen.</p>
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Partner&apos;s Name</label>
-              <Input value={partnerInput} onChange={(e) => setPartnerInput(e.target.value)} placeholder="e.g. Alex" />
+            <div className="p-6 grid gap-6">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Mom&apos;s Name</label>
+                <Input value={momInput} onChange={(e) => setMomInput(e.target.value)} placeholder="e.g. Sarah" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Partner&apos;s Name</label>
+                <Input value={partnerInput} onChange={(e) => setPartnerInput(e.target.value)} placeholder="e.g. Alex" />
+              </div>
             </div>
-          </div>
-          <div className="bg-muted/30 px-6 py-4 border-t border-border flex justify-end">
-            <Button onClick={handleSaveChanges} disabled={isSaving}>
-              {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : <><Save className="mr-2 h-4 w-4" />Save Changes</>}
-            </Button>
-          </div>
-        </section>
+            <div className="bg-muted/30 px-6 py-4 border-t border-border flex justify-end">
+              <Button onClick={handleSaveChanges} disabled={isSaving}>
+                {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : <><Save className="mr-2 h-4 w-4" />Save Changes</>}
+              </Button>
+            </div>
+          </section>
+        )}
+
+        {/* Partner info section - only shown to partners */}
+        {isPartnerView && (
+          <section className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-muted/30 px-6 py-4 border-b border-border">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                Connected Account
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                You're connected to {momName ? `${momName}'s` : "a"} pregnancy profile.
+              </p>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-muted-foreground">
+                You have view-only access to track the pregnancy journey and see ways to help. 
+                Journal entries, symptoms, and private notes are not visible to you.
+              </p>
+            </div>
+          </section>
+        )}
 
         {/* Danger Zone */}
         <section className="border border-destructive/30 rounded-xl overflow-hidden">

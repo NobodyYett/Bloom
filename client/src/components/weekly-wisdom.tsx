@@ -1,5 +1,3 @@
-// client/src/components/weekly-wisdom.tsx
-
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
@@ -63,16 +61,22 @@ export function WeeklyWisdom({ currentWeek, trimester, checkinContext }: WeeklyW
         contextParts.push(`Their most recent check-in was for ${checkinContext.slot}.`);
       }
       if (checkinContext.mood) {
-        const moodText = checkinContext.mood === "happy" ? "great" : checkinContext.mood === "neutral" ? "okay" : "not so good";
+        const moodText =
+          checkinContext.mood === "happy"
+            ? "great"
+            : checkinContext.mood === "neutral"
+              ? "okay"
+              : "not so good";
         contextParts.push(`They're feeling ${moodText} today.`);
       }
       if (checkinContext.symptoms && checkinContext.symptoms.length > 0) {
         contextParts.push(`They're experiencing: ${checkinContext.symptoms.join(", ")}.`);
       }
       if (checkinContext.notes) {
-        const noteSnippet = checkinContext.notes.length > 100 
-          ? checkinContext.notes.substring(0, 100) + "..." 
-          : checkinContext.notes;
+        const noteSnippet =
+          checkinContext.notes.length > 100
+            ? checkinContext.notes.substring(0, 100) + "..."
+            : checkinContext.notes;
         contextParts.push(`Additional notes: "${noteSnippet}"`);
       }
     }
@@ -156,7 +160,10 @@ Keep your tone warm, supportive, and calm. Avoid medical jargon.
             className="md:w-28 shrink-0"
           >
             {loading ? (
-              <><Loader2 className="w-4 h-4 mr-1 animate-spin" />Thinking</>
+              <>
+                <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                Thinking
+              </>
             ) : (
               "Ask FLO"
             )}
@@ -178,7 +185,9 @@ Keep your tone warm, supportive, and calm. Avoid medical jargon.
         {/* Subtle disclaimer */}
         <div className="flex items-start gap-1.5 text-[10px] text-primary/50">
           <Info className="w-3 h-3 shrink-0 mt-0.5" />
-          <p>FLO is here to support you — not replace medical care. If something feels urgent, contact your provider or emergency services.</p>
+          <p>
+            FLO is here to support you — not replace medical care. If something feels urgent, contact your provider or emergency services.
+          </p>
         </div>
       </form>
 
@@ -188,8 +197,10 @@ Keep your tone warm, supportive, and calm. Avoid medical jargon.
           <p className="text-sm text-primary/70">You've reached today's question limit.</p>
           {!isPaid && (
             <p className="text-xs text-primary/60 mt-1">
-              <Button variant="link" className="text-primary p-0 h-auto text-xs">Upgrade to Premium</Button>
-              {" "}for 5 questions per day.
+              <Button variant="link" className="text-primary p-0 h-auto text-xs">
+                Upgrade to Premium
+              </Button>{" "}
+              for 5 questions per day.
             </p>
           )}
         </div>
@@ -208,8 +219,7 @@ Keep your tone warm, supportive, and calm. Avoid medical jargon.
             {answer}
           </p>
           <p className="mt-2 text-[10px] text-primary/70">
-            FLO shares general education & emotional support only. For anything
-            medical or urgent, please contact your healthcare provider.
+            FLO shares general education & emotional support only. For anything medical or urgent, please contact your healthcare provider.
           </p>
         </div>
       )}

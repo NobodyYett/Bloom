@@ -9,9 +9,11 @@ import { WeeklySummary } from "@/components/weekly-summary";
 import { usePregnancyState } from "@/hooks/usePregnancyState";
 import { WeeklyWisdom } from "@/components/weekly-wisdom";
 import { Registries } from "@/components/registries";
+import { PartnerSupportCard } from "@/components/partner-support-card";
 import { useTodayLogs } from "@/hooks/usePregnancyLogs";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
+import { usePartnerAccess } from "@/contexts/PartnerContext";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -41,6 +43,8 @@ export default function Home() {
   } = usePregnancyState();
 
   const { user } = useAuth();
+  const { isPartnerView, momName: partnerMomName } = usePartnerAccess();
+  
   const [nextAppt, setNextAppt] = useState<NextAppt | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [tempName, setTempName] = useState(babyName ?? "");
@@ -48,13 +52,13 @@ export default function Home() {
   // TODO: Replace with actual subscription check
   const isPaid = false;
 
-  // Get today's check-ins for nudge + AI context
+  // Get today's check-ins for nudge + AI context (only for mom view)
   const todayDate = format(new Date(), "yyyy-MM-dd");
   const { data: todayLogs = [] } = useTodayLogs(todayDate);
 
-  // Extract check-in context for nudge (most recent check-in)
+  // Extract check-in context for nudge (most recent check-in) - only used in mom view
   const checkinContext = useMemo(() => {
-    if (todayLogs.length === 0) return null;
+    if (isPartnerView || todayLogs.length === 0) return null;
     
     const mostRecent = todayLogs[todayLogs.length - 1];
     const symptoms = mostRecent?.symptoms
@@ -67,7 +71,7 @@ export default function Home() {
       symptoms,
       notes: mostRecent?.notes ? String(mostRecent.notes) : undefined,
     };
-  }, [todayLogs]);
+  }, [todayLogs, isPartnerView]);
 
   useEffect(() => {
     setTempName(babyName ?? "");
@@ -86,9 +90,9 @@ export default function Home() {
 
   const heroSubtitle =
     currentWeek > 0 && daysRemaining > 0
-      ? `${daysRemaining} days to go! You're doing amazing.`
+      ? `${daysRemaining} days to go! ${isPartnerView ? "You're in this together." : "You're doing amazing."}`
       : currentWeek > 0 && daysRemaining <= 0
-      ? "Your due date has arrived! Best wishes!"
+      ? "The due date has arrived! Best wishes!"
       : "Let's set your due date to start your journey.";
 
   // Build parent pills
@@ -109,7 +113,6 @@ export default function Home() {
       const { data, error } = await supabase
         .from("pregnancy_appointments")
         .select("id, title, starts_at, location")
-        .eq("user_id", user.id)
         .gte("starts_at", nowIso)
         .order("starts_at", { ascending: true })
         .limit(1);
@@ -151,7 +154,8 @@ export default function Home() {
           <div className="relative z-20 max-w-3xl">
             {dueDate && currentWeek > 0 ? (
               <>
-                {editingName ? (
+                {/* Name editing - only for mom */}
+                {!isPartnerView && editingName ? (
                   <div className="space-y-3 max-w-md mb-4">
                     <label className="text-xs font-medium text-gray-700/80">
                       Baby&apos;s name (optional)
@@ -176,18 +180,27 @@ export default function Home() {
                     </div>
                   </div>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => setEditingName(true)}
-                    className="text-left group mb-2"
-                  >
-                    <h1 className="font-serif text-5xl md:text-6xl font-bold drop-shadow-sm text-gray-800 tracking-tight">
-                      {heroTitle}
-                    </h1>
-                    <p className="text-xs mt-1 text-gray-700/80 group-hover:text-gray-900 transition-colors">
-                      Tap to edit baby&apos;s name
-                    </p>
-                  </button>
+                  <div className="mb-2">
+                    {/* Clickable for mom, static for partner */}
+                    {isPartnerView ? (
+                      <h1 className="font-serif text-6xl md:text-7xl font-bold drop-shadow-sm text-gray-800 tracking-tight">
+                        {heroTitle}
+                      </h1>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setEditingName(true)}
+                        className="text-left group"
+                      >
+                        <h1 className="font-serif text-6xl md:text-7xl font-bold drop-shadow-sm text-gray-800 tracking-tight">
+                          {heroTitle}
+                        </h1>
+                        <p className="text-xs mt-1 text-gray-700/80 group-hover:text-gray-900 transition-colors">
+                          Tap to edit baby&apos;s name
+                        </p>
+                      </button>
+                    )}
+                  </div>
                 )}
 
                 {/* Parent name pills */}
@@ -204,16 +217,16 @@ export default function Home() {
                   </div>
                 )}
 
-                <p className="text-xl md:text-2xl opacity-90 font-medium text-gray-700">
+                <p className="text-base md:text-lg text-gray-600/90">
                   {heroSubtitle}
                 </p>
               </>
             ) : (
               <>
-                <h1 className="font-serif text-5xl md:text-6xl font-bold mb-4 drop-shadow-sm text-gray-800 tracking-tight">
+                <h1 className="font-serif text-6xl md:text-7xl font-bold mb-4 drop-shadow-sm text-gray-800 tracking-tight">
                   Welcome
                 </h1>
-                <p className="text-xl md:text-2xl opacity-90 font-medium text-gray-700">
+                <p className="text-base md:text-lg text-gray-600/90">
                   {heroSubtitle}
                 </p>
               </>
@@ -225,9 +238,7 @@ export default function Home() {
           <div className="md:col-span-2 space-y-8">
             <BabySizeDisplay currentWeek={currentWeek} />
 
-            {/* Weekly Summary (includes Today's Gentle Nudge) */}
-            <WeeklySummary isPaid={isPaid} checkinContext={checkinContext} />
-
+            {/* Current Progress */}
             <div className="bg-card rounded-xl p-6 border border-border shadow-sm space-y-4">
               <WeekProgress currentWeek={currentWeek} />
 
@@ -266,22 +277,58 @@ export default function Home() {
                 </div>
               </Link>
             </div>
+
+            {/* Weekly Summary - simplified for partner view */}
+            <WeeklySummary 
+              isPaid={isPaid} 
+              checkinContext={checkinContext}
+              isPartnerView={isPartnerView}
+            />
+
+            {/* Partner Support Card - only for partners */}
+            {isPartnerView && (
+              <PartnerSupportCard 
+                currentWeek={currentWeek}
+                trimester={trimester}
+                momName={partnerMomName}
+              />
+            )}
           </div>
 
+          {/* Right column - only show check-in for mom */}
           <div className="space-y-8">
-            <DailyCheckIn currentWeek={currentWeek} />
+            {!isPartnerView && (
+              <DailyCheckIn currentWeek={currentWeek} />
+            )}
+            
+            {/* For partners, show a supportive message instead */}
+            {isPartnerView && (
+              <div className="bg-card rounded-xl p-6 border border-border shadow-sm text-center">
+                <div className="w-12 h-12 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center mx-auto mb-3">
+                  <span className="text-2xl">💙</span>
+                </div>
+                <h3 className="font-serif text-lg font-semibold mb-2">
+                  You're Here
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  Being present and involved means the world. Check back anytime to see updates and find ways to help.
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Weekly Wisdom - Primary AI entry point with context */}
-        <WeeklyWisdom 
-          currentWeek={currentWeek} 
-          trimester={trimester} 
-          checkinContext={checkinContext}
-        />
+        {/* Weekly Wisdom - only for mom */}
+        {!isPartnerView && (
+          <WeeklyWisdom 
+            currentWeek={currentWeek} 
+            trimester={trimester} 
+            checkinContext={checkinContext}
+          />
+        )}
 
-        {/* Registries */}
-        <Registries />
+        {/* Registries - read-only for partner */}
+        <Registries isReadOnly={isPartnerView} />
       </div>
     </Layout>
   );

@@ -14,6 +14,7 @@ import {
   getSlotLabel,
   ALL_SLOTS,
 } from "@/lib/checkinSlots";
+import { BreathingMoment } from "@/components/breathing-moment";
 
 interface DailyCheckInProps {
   currentWeek: number;
@@ -21,7 +22,6 @@ interface DailyCheckInProps {
 
 type Energy = "high" | "medium" | "low";
 
-// Common symptom chips for quick selection
 const SYMPTOM_CHIPS = [
   "Nausea",
   "Fatigue",
@@ -56,19 +56,16 @@ export function DailyCheckIn({ currentWeek }: DailyCheckInProps) {
 
   const createLogMutation = useCreatePregnancyLog();
 
-  // Form state
   const [selectedSlot, setSelectedSlot] = useState<CheckinSlot>(() => getSuggestedSlot());
   const [selectedMood, setSelectedMood] = useState<"happy" | "neutral" | "sad" | null>(null);
   const [selectedEnergy, setSelectedEnergy] = useState<Energy | null>(null);
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
   const [notes, setNotes] = useState("");
 
-  // Reset slot to suggested when date changes
   useEffect(() => {
     setSelectedSlot(getSuggestedSlot());
   }, [todayDate]);
 
-  // Check which slots are already completed today
   const completedSlots = new Set(
     todayLogs.map((log: any) => log.slot || log.time_of_day).filter(Boolean)
   );
@@ -107,7 +104,6 @@ export function DailyCheckIn({ currentWeek }: DailyCheckInProps) {
         description: `${getSlotLabel(selectedSlot)} check-in recorded.`,
       });
 
-      // Reset form
       setSelectedMood(null);
       setSelectedEnergy(null);
       setSelectedSymptoms([]);
@@ -193,7 +189,6 @@ export function DailyCheckIn({ currentWeek }: DailyCheckInProps) {
 
   return (
     <div className={cardClass}>
-      {/* Header */}
       <div className="text-center">
         <h3 className="font-serif text-2xl font-semibold">Daily Check-in</h3>
         <p className="text-sm text-muted-foreground mt-1">
@@ -203,7 +198,6 @@ export function DailyCheckIn({ currentWeek }: DailyCheckInProps) {
         </p>
       </div>
 
-      {/* Slot Selector */}
       <div className="mt-4 flex gap-1.5 w-full">
         {ALL_SLOTS.map((slot) => {
           const isCompleted = completedSlots.has(slot);
@@ -228,7 +222,6 @@ export function DailyCheckIn({ currentWeek }: DailyCheckInProps) {
         })}
       </div>
 
-      {/* Mood buttons */}
       <div className="mt-4 flex gap-2 w-full">
         <button
           type="button"
@@ -273,7 +266,6 @@ export function DailyCheckIn({ currentWeek }: DailyCheckInProps) {
         </button>
       </div>
 
-      {/* Energy buttons */}
       <div className="mt-4 space-y-2">
         <div className="text-xs font-medium">Energy (optional)</div>
         <div className="flex gap-2 w-full">
@@ -296,7 +288,6 @@ export function DailyCheckIn({ currentWeek }: DailyCheckInProps) {
         </div>
       </div>
 
-      {/* Symptom Chips */}
       <div className="mt-4 space-y-2">
         <div className="text-xs font-medium">Symptoms (optional)</div>
         <div className="flex flex-wrap gap-2">
@@ -318,7 +309,6 @@ export function DailyCheckIn({ currentWeek }: DailyCheckInProps) {
         </div>
       </div>
 
-      {/* Notes */}
       <div className="mt-4 space-y-2">
         <div className="text-xs font-medium">Notes (optional)</div>
         <Textarea
@@ -330,7 +320,6 @@ export function DailyCheckIn({ currentWeek }: DailyCheckInProps) {
         />
       </div>
 
-      {/* Save Button */}
       <Button
         className="w-full mt-4"
         onClick={saveCheckin}
@@ -346,10 +335,11 @@ export function DailyCheckIn({ currentWeek }: DailyCheckInProps) {
         )}
       </Button>
 
-      {/* Previous entries section */}
+      <BreathingMoment mood={selectedMood} />
+
       {hasAnyLogs && (
         <>
-          <p className="text-sm text-muted-foreground mt-5 text-center">
+          <p className="text-sm text-muted-foreground mt-2 text-center">
             Today's check-ins
           </p>
 
