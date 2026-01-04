@@ -134,7 +134,6 @@ function getSupportSuggestions(
 ): SupportSuggestion[] {
   const suggestions: SupportSuggestion[] = [];
 
-  // Energy-based
   if (stats.dominantEnergy === "low") {
     suggestions.push({
       icon: <Coffee className="w-4 h-4" />,
@@ -142,7 +141,6 @@ function getSupportSuggestions(
     });
   }
 
-  // Symptom-based
   const symptomsLower = stats.topSymptoms.map(s => s.toLowerCase());
   
   if (symptomsLower.includes("headache") || symptomsLower.includes("headaches")) {
@@ -173,7 +171,6 @@ function getSupportSuggestions(
     });
   }
 
-  // Mood-based
   if (stats.dominantMood === "sad") {
     suggestions.push({
       icon: <MessageCircle className="w-4 h-4" />,
@@ -181,7 +178,6 @@ function getSupportSuggestions(
     });
   }
 
-  // Appointment
   if (hasUpcomingAppointment) {
     suggestions.push({
       icon: <Calendar className="w-4 h-4" />,
@@ -189,7 +185,6 @@ function getSupportSuggestions(
     });
   }
 
-  // Trimester fallbacks
   if (suggestions.length < 2) {
     if (trimester === 1) {
       suggestions.push({
@@ -224,7 +219,6 @@ export function WeeklySummary({
   const { data: weekLogs = [], isLoading } = useWeekLogs();
   const stats = useMemo(() => analyzeWeekLogs(weekLogs), [weekLogs]);
 
-  // Nudge state - only for mom view
   const [nudgeCompleted, setNudgeCompleted] = useState(false);
   const nudge = getNudgeForCheckin(checkinContext);
 
@@ -241,7 +235,6 @@ export function WeeklySummary({
     }
   }
 
-  // Build summary text
   const summaryParts: string[] = [];
   if (stats.dominantMood) {
     const moodText = getMoodLabel(stats.dominantMood);
@@ -263,13 +256,10 @@ export function WeeklySummary({
     [stats, trimester, hasUpcomingAppointment]
   );
 
-  // ============================================
-  // PARTNER VIEW: Clean, Professional Card
-  // ============================================
+  // PARTNER VIEW
   if (isPartnerView) {
     return (
       <section className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
-        {/* Header with gradient */}
         <div className="bg-gradient-to-br from-purple-100 via-rose-50 to-pink-100 dark:from-purple-950/40 dark:via-rose-950/30 dark:to-pink-950/40 px-6 py-5 border-b border-border/50">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 rounded-full bg-white dark:bg-card shadow-sm border border-white/50 dark:border-border flex items-center justify-center">
@@ -288,14 +278,10 @@ export function WeeklySummary({
 
           {hasWeekData ? (
             <>
-              {/* Summary sentence in a clean card */}
               <div className="bg-white/60 dark:bg-card/60 backdrop-blur-sm rounded-lg p-4 mb-4 border border-white/50 dark:border-border/50">
-                <p className="text-sm text-foreground leading-relaxed">
-                  {freeRecap}
-                </p>
+                <p className="text-sm text-foreground leading-relaxed">{freeRecap}</p>
               </div>
 
-              {/* Compact indicators - equal width */}
               <div className="grid grid-cols-3 gap-2">
                 <div className="bg-white/60 dark:bg-card/60 backdrop-blur-sm rounded-lg p-3 border border-white/50 dark:border-border/50">
                   <div className="text-xs text-muted-foreground mb-2">Mood</div>
@@ -340,7 +326,6 @@ export function WeeklySummary({
           )}
         </div>
 
-        {/* Support Section */}
         <div className="p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
@@ -380,12 +365,10 @@ export function WeeklySummary({
     );
   }
 
-  // ============================================
-  // MOM VIEW: Original card with nudge
-  // ============================================
+  // MOM VIEW
   return (
     <section className="bg-card rounded-xl p-6 border border-border shadow-sm">
-      {/* Today's Gentle Nudge */}
+      {/* Today's Gentle Nudge - FIXED: nudge.message instead of nudge */}
       {!nudgeCompleted && nudge && (
         <div className="flex items-start gap-3 pb-4 mb-4 border-b border-border">
           <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0">
@@ -393,7 +376,7 @@ export function WeeklySummary({
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-medium text-muted-foreground mb-1">Today's gentle nudge</p>
-            <p className="text-sm text-foreground">{nudge}</p>
+            <p className="text-sm text-foreground">{nudge.message}</p>
           </div>
           <Checkbox
             checked={nudgeCompleted}
@@ -403,7 +386,6 @@ export function WeeklySummary({
         </div>
       )}
 
-      {/* Header */}
       <div className="flex items-center gap-3 mb-4">
         <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
           <BarChart3 className="w-4 h-4 text-primary" />
@@ -421,12 +403,8 @@ export function WeeklySummary({
 
       {hasWeekData && (
         <>
-          {/* Summary Text */}
-          <p className="text-sm text-foreground leading-relaxed mb-4">
-            {freeRecap}
-          </p>
+          <p className="text-sm text-foreground leading-relaxed mb-4">{freeRecap}</p>
 
-          {/* Visual Stats Row */}
           <div className="grid grid-cols-3 gap-3 mb-4">
             <div className="bg-muted/50 rounded-lg p-3">
               <div className="text-xs text-muted-foreground mb-2">Mood</div>
@@ -462,7 +440,6 @@ export function WeeklySummary({
             </div>
           </div>
 
-          {/* Premium upsell */}
           {!isPaid && (
             <p className="text-xs text-muted-foreground text-center">
               Upgrade to Premium for deeper insights and personalized suggestions.

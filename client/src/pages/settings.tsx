@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { format, differenceInDays } from "date-fns";
 import { 
   Loader2, Save, Trash2, AlertTriangle, Sun, Moon, Monitor, Bell, 
-  Users, Copy, Check, Link2 
+  Users, Copy, Check, Link2, Clock, Calendar
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme, type ThemeMode } from "@/theme/theme-provider";
@@ -24,13 +24,20 @@ import {
 } from "@/lib/partnerInvite";
 import {
   isNotificationsSupported,
-  isNightReminderEnabled,
-  toggleNightReminder,
-  isMorningGuidanceEnabled,
-  toggleMorningGuidance,
+  isMorningCheckinEnabled,
+  toggleMorningCheckin,
+  isEveningCheckinEnabled,
+  toggleEveningCheckin,
+  isAppointmentRemindersEnabled,
+  toggleAppointmentReminders,
+  getDefaultReminderTimes,
+  setDefaultReminderTimes,
   hasNotificationPermission,
   requestNotificationPermission,
+  REMINDER_TIME_OPTIONS,
+  type ReminderTimePreference,
 } from "@/lib/notifications";
+import { rescheduleAllAppointmentReminders } from "@/hooks/useAppointments";
 
 function parseLocalDate(dateString: string): Date | null {
   const trimmed = dateString.trim();
@@ -64,19 +71,24 @@ export default function SettingsPage() {
   const [confirmText, setConfirmText] = useState("");
 
   // Partner invite state
-  // We store the RAW token in state (for display) but only the HASH goes to DB
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [hasExistingInvite, setHasExistingInvite] = useState(false);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [copiedInvite, setCopiedInvite] = useState(false);
 
   // Notification state
-  const [nightReminderEnabled, setNightReminderEnabled] = useState(false);
-  const [morningGuidanceEnabled, setMorningGuidanceEnabled] = useState(false);
+  const [morningCheckinEnabled, setMorningCheckinEnabled] = useState(false);
+  const [eveningCheckinEnabled, setEveningCheckinEnabled] = useState(false);
+  const [appointmentRemindersEnabled, setAppointmentRemindersEnabled] = useState(false);
+  const [reminderTimes, setReminderTimes] = useState<ReminderTimePreference>({
+    firstReminder: 1440,
+    secondReminder: 60,
+  });
   const [notificationsAvailable, setNotificationsAvailable] = useState(false);
   const [permissionGranted, setPermissionGranted] = useState(false);
-  const [togglingNight, setTogglingNight] = useState(false);
   const [togglingMorning, setTogglingMorning] = useState(false);
+  const [togglingEvening, setTogglingEvening] = useState(false);
+  const [togglingAppointments, setTogglingAppointments] = useState(false);
 
   const email = user?.email ?? "Unknown";
 
@@ -87,8 +99,10 @@ export default function SettingsPage() {
       if (supported) {
         const hasPermission = await hasNotificationPermission();
         setPermissionGranted(hasPermission);
-        setNightReminderEnabled(isNightReminderEnabled());
-        setMorningGuidanceEnabled(isMorningGuidanceEnabled());
+        setMorningCheckinEnabled(isMorningCheckinEnabled());
+        setEveningCheckinEnabled(isEveningCheckinEnabled());
+        setAppointmentRemindersEnabled(isAppointmentRemindersEnabled());
+        setReminderTimes(getDefaultReminderTimes());
       }
     }
     checkNotifications();
@@ -102,7 +116,6 @@ export default function SettingsPage() {
     setPartnerInput(partnerName ?? "");
   }, [babyName, dueDate, babySex, profileMomName, partnerName]);
 
-  // Check if mom has an existing (non-revoked) invite
   useEffect(() => {
     if (isPartnerView || !user) return;
 
@@ -121,40 +134,7 @@ export default function SettingsPage() {
     checkExistingInvite();
   }, [user, isPartnerView]);
 
-  async function handleNightReminderToggle(enabled: boolean) {
-    setTogglingNight(true);
-    try {
-      if (enabled && !permissionGranted) {
-        const granted = await requestNotificationPermission();
-        setPermissionGranted(granted);
-        if (!granted) {
-          toast({
-            title: "Notifications disabled",
-            description: "Please enable notifications in your device settings.",
-            variant: "destructive",
-          });
-          setTogglingNight(false);
-          return;
-        }
-      }
-      const success = await toggleNightReminder(enabled);
-      if (success) {
-        setNightReminderEnabled(enabled);
-        toast({
-          title: enabled ? "Evening reminder enabled" : "Evening reminder disabled",
-          description: enabled
-            ? "You'll receive a gentle reminder at 8:30pm each evening."
-            : "Evening reminders have been turned off.",
-        });
-      }
-    } catch (error) {
-      console.error("Failed to toggle night reminder:", error);
-    } finally {
-      setTogglingNight(false);
-    }
-  }
-
-  async function handleMorningGuidanceToggle(enabled: boolean) {
+  async function handleMorningCheckinToggle(enabled: boolean) {
     setTogglingMorning(true);
     try {
       if (enabled && !permissionGranted) {
@@ -170,21 +150,105 @@ export default function SettingsPage() {
           return;
         }
       }
-      const success = await toggleMorningGuidance(enabled);
+      const success = await toggleMorningCheckin(enabled);
       if (success) {
-        setMorningGuidanceEnabled(enabled);
+        setMorningCheckinEnabled(enabled);
         toast({
-          title: enabled ? "Morning guidance enabled" : "Morning guidance disabled",
+          title: enabled ? "Morning check-in enabled" : "Morning check-in disabled",
           description: enabled
-            ? "You'll receive a gentle morning message at 8:30am."
-            : "Morning guidance has been turned off.",
+            ? "You'll receive a gentle reminder at 8:30am each morning."
+            : "Morning check-in reminders have been turned off.",
         });
       }
     } catch (error) {
-      console.error("Failed to toggle morning guidance:", error);
+      console.error("Failed to toggle morning check-in:", error);
     } finally {
       setTogglingMorning(false);
     }
+  }
+
+  async function handleEveningCheckinToggle(enabled: boolean) {
+    setTogglingEvening(true);
+    try {
+      if (enabled && !permissionGranted) {
+        const granted = await requestNotificationPermission();
+        setPermissionGranted(granted);
+        if (!granted) {
+          toast({
+            title: "Notifications disabled",
+            description: "Please enable notifications in your device settings.",
+            variant: "destructive",
+          });
+          setTogglingEvening(false);
+          return;
+        }
+      }
+      const success = await toggleEveningCheckin(enabled);
+      if (success) {
+        setEveningCheckinEnabled(enabled);
+        toast({
+          title: enabled ? "Evening check-in enabled" : "Evening check-in disabled",
+          description: enabled
+            ? "You'll receive a gentle reminder at 8:30pm to reflect on your day."
+            : "Evening check-in reminders have been turned off.",
+        });
+      }
+    } catch (error) {
+      console.error("Failed to toggle evening check-in:", error);
+    } finally {
+      setTogglingEvening(false);
+    }
+  }
+
+  async function handleAppointmentRemindersToggle(enabled: boolean) {
+    setTogglingAppointments(true);
+    try {
+      if (enabled && !permissionGranted) {
+        const granted = await requestNotificationPermission();
+        setPermissionGranted(granted);
+        if (!granted) {
+          toast({
+            title: "Notifications disabled",
+            description: "Please enable notifications in your device settings.",
+            variant: "destructive",
+          });
+          setTogglingAppointments(false);
+          return;
+        }
+      }
+      const success = await toggleAppointmentReminders(enabled);
+      if (success) {
+        setAppointmentRemindersEnabled(enabled);
+        
+        if (enabled && user) {
+          await rescheduleAllAppointmentReminders(user.id);
+        }
+        
+        toast({
+          title: enabled ? "Appointment reminders enabled" : "Appointment reminders disabled",
+          description: enabled
+            ? "You'll be reminded before upcoming appointments."
+            : "Appointment reminders have been turned off.",
+        });
+      }
+    } catch (error) {
+      console.error("Failed to toggle appointment reminders:", error);
+    } finally {
+      setTogglingAppointments(false);
+    }
+  }
+
+  function handleReminderTimeChange(which: "first" | "second", value: number) {
+    const newTimes = {
+      ...reminderTimes,
+      [which === "first" ? "firstReminder" : "secondReminder"]: value,
+    };
+    setReminderTimes(newTimes);
+    setDefaultReminderTimes(newTimes);
+    toast({
+      title: "Reminder time updated",
+      description: "New appointments will use this reminder time.",
+    });
   }
 
   async function handleSaveChanges() {
@@ -236,10 +300,7 @@ export default function SettingsPage() {
     setInviteLoading(true);
 
     try {
-      // Generate a secure random token
       const token = generateInviteToken();
-      
-      // Hash it - only the hash goes to the database
       const tokenHash = await hashToken(token);
 
       const { error } = await supabase
@@ -251,7 +312,6 @@ export default function SettingsPage() {
 
       if (error) throw error;
 
-      // Store the raw token in state for display (never saved to DB)
       setInviteToken(token);
       setHasExistingInvite(true);
       toast({ title: "Invite created", description: "Share this link with your partner." });
@@ -269,7 +329,6 @@ export default function SettingsPage() {
 
     setInviteLoading(true);
     try {
-      // Revoke ALL active invites for this mom
       const { error } = await supabase
         .from("partner_access")
         .update({ revoked_at: new Date().toISOString() })
@@ -358,7 +417,7 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* Notifications - available for both mom and partner */}
+        {/* Notifications */}
         <section className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
           <div className="bg-muted/30 px-6 py-4 border-b border-border">
             <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -368,44 +427,110 @@ export default function SettingsPage() {
             <p className="text-sm text-muted-foreground">Manage your reminder preferences.</p>
           </div>
           <div className="p-6 space-y-6">
-            {/* Morning Guidance */}
+            {/* Morning Check-in */}
             <div className="flex items-center justify-between">
               <div className="space-y-1">
-                <label className="text-sm font-medium">
-                  {isPartnerView ? "Appointment reminders" : "Morning guidance"}
-                </label>
+                <label className="text-sm font-medium">Morning check-in</label>
                 <p className="text-xs text-muted-foreground">
                   {notificationsAvailable 
-                    ? isPartnerView 
-                      ? "Get reminded about upcoming appointments"
-                      : "A gentle message at 8:30am to start your day" 
+                    ? "\"How did you sleep?\" at 8:30am" 
                     : "Available on iOS and Android apps"
                   }
                 </p>
               </div>
               <Switch
-                checked={morningGuidanceEnabled}
-                onCheckedChange={handleMorningGuidanceToggle}
+                checked={morningCheckinEnabled}
+                onCheckedChange={handleMorningCheckinToggle}
                 disabled={!notificationsAvailable || togglingMorning}
               />
             </div>
 
-            {/* Evening Reminder - only for mom */}
+            {/* Evening Check-in - only for mom */}
             {!isPartnerView && (
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
-                  <label className="text-sm font-medium">Evening check-in reminder</label>
+                  <label className="text-sm font-medium">Evening check-in</label>
                   <p className="text-xs text-muted-foreground">
-                    {notificationsAvailable ? "A gentle reminder at 8:30pm to check in" : "Available on iOS and Android apps"}
+                    {notificationsAvailable 
+                      ? "\"How was your day?\" at 8:30pm" 
+                      : "Available on iOS and Android apps"
+                    }
                   </p>
                 </div>
                 <Switch
-                  checked={nightReminderEnabled}
-                  onCheckedChange={handleNightReminderToggle}
-                  disabled={!notificationsAvailable || togglingNight}
+                  checked={eveningCheckinEnabled}
+                  onCheckedChange={handleEveningCheckinToggle}
+                  disabled={!notificationsAvailable || togglingEvening}
                 />
               </div>
             )}
+
+            {/* Appointment Reminders */}
+            <div className="pt-4 border-t border-border">
+              <div className="flex items-center justify-between mb-4">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    <Calendar className="w-4 h-4" />
+                    Appointment reminders
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    {notificationsAvailable 
+                      ? "Get reminded before upcoming appointments" 
+                      : "Available on iOS and Android apps"
+                    }
+                  </p>
+                </div>
+                <Switch
+                  checked={appointmentRemindersEnabled}
+                  onCheckedChange={handleAppointmentRemindersToggle}
+                  disabled={!notificationsAvailable || togglingAppointments}
+                />
+              </div>
+
+              {appointmentRemindersEnabled && notificationsAvailable && (
+                <div className="space-y-4 pl-6 border-l-2 border-primary/20 ml-2">
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      First reminder
+                    </label>
+                    <select
+                      value={reminderTimes.firstReminder}
+                      onChange={(e) => handleReminderTimeChange("first", Number(e.target.value))}
+                      className="w-full h-9 px-3 rounded-md border border-border bg-background text-sm"
+                    >
+                      {REMINDER_TIME_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      Second reminder
+                    </label>
+                    <select
+                      value={reminderTimes.secondReminder}
+                      onChange={(e) => handleReminderTimeChange("second", Number(e.target.value))}
+                      className="w-full h-9 px-3 rounded-md border border-border bg-background text-sm"
+                    >
+                      {REMINDER_TIME_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    These defaults apply to new appointments. You can customize each appointment individually.
+                  </p>
+                </div>
+              )}
+            </div>
 
             {!permissionGranted && notificationsAvailable && (
               <p className="text-xs text-amber-600 dark:text-amber-400">
@@ -429,7 +554,6 @@ export default function SettingsPage() {
             </div>
             <div className="p-6 space-y-4">
               {inviteToken ? (
-                // Just created an invite - show the link
                 <>
                   <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
                     <Link2 className="w-5 h-5 text-green-600 dark:text-green-400 shrink-0" />
@@ -439,12 +563,7 @@ export default function SettingsPage() {
                         {buildInviteUrl(inviteToken)}
                       </p>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleCopyInvite}
-                      className="shrink-0"
-                    >
+                    <Button variant="outline" size="sm" onClick={handleCopyInvite} className="shrink-0">
                       {copiedInvite ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                     </Button>
                   </div>
@@ -456,27 +575,15 @@ export default function SettingsPage() {
                   </div>
 
                   <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleCopyInvite}
-                      className="flex-1"
-                    >
+                    <Button variant="outline" size="sm" onClick={handleCopyInvite} className="flex-1">
                       {copiedInvite ? "Copied!" : "Copy invite link"}
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleRevokeAccess}
-                      disabled={inviteLoading}
-                      className="text-destructive hover:text-destructive"
-                    >
+                    <Button variant="outline" size="sm" onClick={handleRevokeAccess} disabled={inviteLoading} className="text-destructive hover:text-destructive">
                       Revoke
                     </Button>
                   </div>
                 </>
               ) : hasExistingInvite || hasActivePartner ? (
-                // Has an existing invite (but we don't have the token) or active partner
                 <>
                   <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border">
                     <Users className="w-5 h-5 text-muted-foreground shrink-0" />
@@ -493,36 +600,17 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleRevokeAccess}
-                    disabled={inviteLoading}
-                    className="w-full text-destructive hover:text-destructive"
-                  >
-                    {inviteLoading ? (
-                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Revoking...</>
-                    ) : (
-                      "Revoke partner access"
-                    )}
+                  <Button variant="outline" size="sm" onClick={handleRevokeAccess} disabled={inviteLoading} className="w-full text-destructive hover:text-destructive">
+                    {inviteLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Revoking...</> : "Revoke partner access"}
                   </Button>
                 </>
               ) : (
-                // No invite yet
                 <>
                   <p className="text-sm text-muted-foreground">
                     Your partner will be able to see your baby's progress, upcoming appointments, and ways they can support you. They won't see your journal entries, symptoms, or private notes.
                   </p>
-                  <Button
-                    onClick={handleCreateInvite}
-                    disabled={inviteLoading}
-                    className="w-full"
-                  >
-                    {inviteLoading ? (
-                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Creating...</>
-                    ) : (
-                      <><Users className="w-4 h-4 mr-2" />Create partner invite</>
-                    )}
+                  <Button onClick={handleCreateInvite} disabled={inviteLoading} className="w-full">
+                    {inviteLoading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Creating...</> : <><Users className="w-4 h-4 mr-2" />Create partner invite</>}
                   </Button>
                 </>
               )}
@@ -549,25 +637,17 @@ export default function SettingsPage() {
               <div className="space-y-2">
                 <label className="text-sm font-medium">Baby&apos;s Sex</label>
                 <div className="flex gap-4">
-                  <label
-                    className={cn(
-                      "flex-1 flex items-center justify-center gap-2 cursor-pointer border rounded-md px-4 py-3 transition-all",
-                      sexInput === "boy"
-                        ? "bg-blue-50 border-blue-200 text-blue-700 ring-1 ring-blue-200 dark:bg-blue-950 dark:border-blue-800 dark:text-blue-300"
-                        : "hover:bg-muted"
-                    )}
-                  >
+                  <label className={cn(
+                    "flex-1 flex items-center justify-center gap-2 cursor-pointer border rounded-md px-4 py-3 transition-all",
+                    sexInput === "boy" ? "bg-blue-50 border-blue-200 text-blue-700 ring-1 ring-blue-200 dark:bg-blue-950 dark:border-blue-800 dark:text-blue-300" : "hover:bg-muted"
+                  )}>
                     <input type="radio" name="sex" checked={sexInput === "boy"} onChange={() => setSexInput("boy")} className="sr-only" />
                     <span>Boy</span>
                   </label>
-                  <label
-                    className={cn(
-                      "flex-1 flex items-center justify-center gap-2 cursor-pointer border rounded-md px-4 py-3 transition-all",
-                      sexInput === "girl"
-                        ? "bg-pink-50 border-pink-200 text-pink-700 ring-1 ring-pink-200 dark:bg-pink-950 dark:border-pink-800 dark:text-pink-300"
-                        : "hover:bg-muted"
-                    )}
-                  >
+                  <label className={cn(
+                    "flex-1 flex items-center justify-center gap-2 cursor-pointer border rounded-md px-4 py-3 transition-all",
+                    sexInput === "girl" ? "bg-pink-50 border-pink-200 text-pink-700 ring-1 ring-pink-200 dark:bg-pink-950 dark:border-pink-800 dark:text-pink-300" : "hover:bg-muted"
+                  )}>
                     <input type="radio" name="sex" checked={sexInput === "girl"} onChange={() => setSexInput("girl")} className="sr-only" />
                     <span>Girl</span>
                   </label>
@@ -602,7 +682,7 @@ export default function SettingsPage() {
           </section>
         )}
 
-        {/* Partner info section - only shown to partners */}
+        {/* Partner info section */}
         {isPartnerView && (
           <section className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
             <div className="bg-muted/30 px-6 py-4 border-b border-border">
@@ -641,13 +721,7 @@ export default function SettingsPage() {
               </p>
             </div>
             <div className="flex gap-4">
-              <Input
-                type="text"
-                value={confirmText}
-                onChange={(e) => setConfirmText(e.target.value)}
-                placeholder="Type DELETE to confirm"
-                className="max-w-[200px]"
-              />
+              <Input type="text" value={confirmText} onChange={(e) => setConfirmText(e.target.value)} placeholder="Type DELETE to confirm" className="max-w-[200px]" />
               <Button variant="destructive" disabled={confirmText !== "DELETE" || deleting} onClick={handleDeleteAccount}>
                 {deleting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Deleting...</> : <><Trash2 className="mr-2 h-4 w-4" />Delete Account</>}
               </Button>
