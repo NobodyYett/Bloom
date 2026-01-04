@@ -42,7 +42,7 @@ export default function Home() {
   } = usePregnancyState();
 
   const { user } = useAuth();
-  const { isPartnerView, momName: partnerMomName } = usePartnerAccess();
+  const { isPartnerView, momName: partnerMomName, momUserId } = usePartnerAccess();
   
   const [nextAppt, setNextAppt] = useState<NextAppt | null>(null);
   const [editingName, setEditingName] = useState(false);
@@ -303,6 +303,7 @@ export default function Home() {
                 currentWeek={currentWeek}
                 trimester={trimester}
                 momName={partnerMomName}
+                momUserId={momUserId}
                 hasUpcomingAppointment={!!nextAppt}
               />
             )}
