@@ -4,6 +4,7 @@ import { useMemo, useState, useEffect, useCallback } from "react";
 import { differenceInWeeks, differenceInDays, format } from "date-fns";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import { usePartnerAccess } from "@/contexts/PartnerContext";
 import { supabase } from "@/lib/supabase";
 
 const TOTAL_PREGNANCY_WEEKS = 40;
@@ -61,16 +62,20 @@ const fetchProfileData = async (userId: string | undefined) => {
 
 export function usePregnancyState(): PregnancyState {
   const { user, loading: authLoading } = useAuth();
+  const { isPartnerView, momUserId, isLoading: partnerLoading } = usePartnerAccess();
   const queryClient = useQueryClient();
+
+  // Key insight: When in partner view, fetch the MOM's profile, not the partner's
+  const profileUserId = isPartnerView ? momUserId : user?.id;
 
   const {
     data: profile,
     isLoading: isProfileFetching,
     refetch,
   } = useQuery({
-    queryKey: ["pregnancyProfile", user?.id],
-    queryFn: () => fetchProfileData(user?.id),
-    enabled: !!user,
+    queryKey: ["pregnancyProfile", profileUserId],
+    queryFn: () => fetchProfileData(profileUserId ?? undefined),
+    enabled: !!profileUserId && !partnerLoading,
     staleTime: 1000 * 60,
   });
 
@@ -89,7 +94,7 @@ export function usePregnancyState(): PregnancyState {
       setIsOnboardingCompleteState(profile.onboarding_complete ?? false);
       setMomNameState(profile.mom_name ?? null);
       setPartnerNameState(profile.partner_name ?? null);
-    } else if (!isProfileFetching && user && !authLoading) {
+    } else if (!isProfileFetching && profileUserId && !authLoading && !partnerLoading) {
       setDueDateState(null);
       setBabyNameState(null);
       setBabySexState("unknown");
@@ -97,12 +102,14 @@ export function usePregnancyState(): PregnancyState {
       setMomNameState(null);
       setPartnerNameState(null);
     }
-  }, [profile, isProfileFetching, user, authLoading]);
+  }, [profile, isProfileFetching, profileUserId, authLoading, partnerLoading]);
 
   const today = useMemo(() => new Date(), []);
 
+  // Partners should not be able to update profile data
   const setDueDate = useCallback(
     async (date: Date | null) => {
+      if (isPartnerView) return; // Partners can't edit
       setDueDateState(date);
       if (!user) return;
 
@@ -123,11 +130,12 @@ export function usePregnancyState(): PregnancyState {
         refetch();
       }
     },
-    [user, refetch, queryClient]
+    [user, isPartnerView, refetch, queryClient]
   );
 
   const setBabyName = useCallback(
     async (name: string | null) => {
+      if (isPartnerView) return; // Partners can't edit
       setBabyNameState(name);
       if (!user) return;
 
@@ -148,11 +156,12 @@ export function usePregnancyState(): PregnancyState {
         refetch();
       }
     },
-    [user, refetch, queryClient]
+    [user, isPartnerView, refetch, queryClient]
   );
 
   const setBabySex = useCallback(
     async (sex: BabySex) => {
+      if (isPartnerView) return; // Partners can't edit
       setBabySexState(sex);
       if (!user) return;
 
@@ -173,11 +182,12 @@ export function usePregnancyState(): PregnancyState {
         refetch();
       }
     },
-    [user, refetch, queryClient]
+    [user, isPartnerView, refetch, queryClient]
   );
 
   const setMomName = useCallback(
     async (name: string | null) => {
+      if (isPartnerView) return; // Partners can't edit
       setMomNameState(name);
       if (!user) return;
 
@@ -198,11 +208,12 @@ export function usePregnancyState(): PregnancyState {
         refetch();
       }
     },
-    [user, refetch, queryClient]
+    [user, isPartnerView, refetch, queryClient]
   );
 
   const setPartnerName = useCallback(
     async (name: string | null) => {
+      if (isPartnerView) return; // Partners can't edit
       setPartnerNameState(name);
       if (!user) return;
 
@@ -223,7 +234,7 @@ export function usePregnancyState(): PregnancyState {
         refetch();
       }
     },
-    [user, refetch, queryClient]
+    [user, isPartnerView, refetch, queryClient]
   );
 
   const pregnancyMetrics = useMemo(() => {
@@ -253,7 +264,7 @@ export function usePregnancyState(): PregnancyState {
     return { currentWeek, daysRemaining, trimester, progress };
   }, [dueDate, today]);
 
-  const isProfileLoading = authLoading || isProfileFetching;
+  const isProfileLoading = authLoading || partnerLoading || isProfileFetching;
 
   return {
     dueDate,
