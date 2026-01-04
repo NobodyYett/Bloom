@@ -278,14 +278,12 @@ export default function Home() {
               </Link>
             </div>
 
-            {/* Weekly Summary - only for mom (partners see private message) */}
-            {!isPartnerView && (
-              <WeeklySummary 
-                isPaid={isPaid} 
-                checkinContext={checkinContext}
-                isPartnerView={isPartnerView}
-              />
-            )}
+            {/* Weekly Summary - shows how mom is feeling (for partner awareness) */}
+            <WeeklySummary 
+              isPaid={isPaid} 
+              checkinContext={checkinContext}
+              isPartnerView={isPartnerView}
+            />
           </div>
 
           {/* Right column */}

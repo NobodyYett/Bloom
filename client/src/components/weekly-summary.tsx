@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect } from "react";
 import { useWeekLogs } from "@/hooks/usePregnancyLogs";
-import { BarChart3, Smile, Meh, Frown, Zap, Sun, Sunset, Moon, TrendingUp, Sparkles, Check } from "lucide-react";
+import { BarChart3, Smile, Meh, Frown, Zap, Sun, Sunset, Moon, TrendingUp, Sparkles, Check, Heart } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getNudgeForCheckin, isNudgeCompleted, markNudgeCompleted, type CheckinContext } from "@/lib/nudges";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -135,9 +135,9 @@ export function WeeklySummary({
   checkinContext = null,
   isPartnerView = false 
 }: WeeklySummaryProps) {
-  // Skip log fetching for partners - logs are private
+  // Fetch logs - for partners this will fetch mom's logs
   const { data: weekLogs = [], isLoading } = useWeekLogs();
-  const stats = useMemo(() => isPartnerView ? analyzeWeekLogs([]) : analyzeWeekLogs(weekLogs), [weekLogs, isPartnerView]);
+  const stats = useMemo(() => analyzeWeekLogs(weekLogs), [weekLogs]);
 
   // Nudge state - only for mom view
   const [nudgeCompleted, setNudgeCompleted] = useState(false);
@@ -162,9 +162,9 @@ export function WeeklySummary({
     const moodText = getMoodLabel(stats.dominantMood);
     summaryParts.push(`Feeling mostly ${moodText} this week`);
   }
-  // Only show symptoms to mom
-  if (!isPartnerView && stats.topSymptoms.length > 0) {
-    const symptomsText = stats.topSymptoms.join(", ").toLowerCase();
+  // Show symptoms for both mom and partner (so partner can be supportive)
+  if (stats.topSymptoms.length > 0) {
+    const symptomsText = stats.topSymptoms.slice(0, 2).join(" and ").toLowerCase();
     summaryParts.push(`with ${symptomsText} showing up most often`);
   }
 
@@ -174,26 +174,93 @@ export function WeeklySummary({
 
   const hasWeekData = !isLoading && stats.totalCheckins > 0;
 
-  // Partner view: simplified card - doesn't show log data (private)
+  // Partner view: simplified card showing mood/energy summary (no private notes)
   if (isPartnerView) {
     return (
       <section className="bg-card rounded-xl p-6 border border-border shadow-sm">
         {/* Header */}
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-            <BarChart3 className="w-4 h-4 text-primary" />
+          <div className="w-8 h-8 rounded-full bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center">
+            <Heart className="w-4 h-4 text-rose-600 dark:text-rose-400" />
           </div>
           <div>
-            <h2 className="font-medium text-sm">Week at a Glance</h2>
+            <h2 className="font-medium text-sm">How She's Feeling</h2>
             <p className="text-xs text-muted-foreground">
-              Daily check-ins are private
+              {hasWeekData 
+                ? `${stats.totalCheckins} check-in${stats.totalCheckins !== 1 ? "s" : ""} this week`
+                : "Waiting for check-ins"
+              }
             </p>
           </div>
         </div>
 
-        <p className="text-sm text-muted-foreground">
-          Check-in details are kept private, but you can see appointments and find ways to support throughout the week.
-        </p>
+        {hasWeekData && (
+          <>
+            {/* Summary Text - mood focused */}
+            <p className="text-sm text-foreground leading-relaxed mb-4">
+              {stats.dominantMood 
+                ? `Feeling mostly ${getMoodLabel(stats.dominantMood)} this week${stats.topSymptoms.length > 0 ? `, with ${stats.topSymptoms.slice(0, 2).join(" and ").toLowerCase()} showing up most often` : ""}.`
+                : "Check-ins recorded this week."
+              }
+            </p>
+
+            {/* Visual Stats Row */}
+            <div className="grid grid-cols-3 gap-3">
+              {/* Mood Distribution */}
+              <div className="bg-muted/50 rounded-lg p-3">
+                <div className="text-xs text-muted-foreground mb-2">Mood</div>
+                <div className="flex items-center gap-1.5">
+                  {(["happy", "neutral", "sad"] as Mood[]).map((mood) => (
+                    <div key={mood} className="flex items-center gap-0.5">
+                      {moodIcons[mood]}
+                      <span className="text-xs font-medium">{stats.moodCounts[mood]}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Top Symptom */}
+              <div className="bg-muted/50 rounded-lg p-3">
+                <div className="text-xs text-muted-foreground mb-2">Top symptom</div>
+                <div className="text-sm font-medium truncate">
+                  {stats.topSymptoms[0] || "None"}
+                </div>
+              </div>
+
+              {/* Energy */}
+              <div className="bg-muted/50 rounded-lg p-3">
+                <div className="text-xs text-muted-foreground mb-2">Energy</div>
+                <div className="flex items-center gap-1">
+                  <Zap className={cn(
+                    "w-4 h-4",
+                    stats.dominantEnergy === "high" ? "text-green-500" :
+                    stats.dominantEnergy === "medium" ? "text-yellow-500" : "text-red-500"
+                  )} />
+                  <span className="text-sm font-medium capitalize">
+                    {stats.dominantEnergy || "—"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Supportive tip based on how she's feeling */}
+            {(stats.dominantMood === "sad" || stats.dominantEnergy === "low") && (
+              <div className="mt-4 p-3 rounded-lg bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50">
+                <p className="text-xs text-rose-700 dark:text-rose-300">
+                  💙 {stats.dominantMood === "sad" 
+                    ? "She might need extra support this week. Small gestures like making dinner or giving her space to rest can help."
+                    : "Energy has been low. Consider taking on extra tasks around the house to help her rest."}
+                </p>
+              </div>
+            )}
+          </>
+        )}
+
+        {!hasWeekData && !isLoading && (
+          <p className="text-sm text-muted-foreground">
+            Check back later to see how the week is going.
+          </p>
+        )}
       </section>
     );
   }

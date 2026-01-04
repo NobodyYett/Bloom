@@ -92,19 +92,19 @@ export function useTodayLogs(date: string) {
 }
 
 // Logs for last 7 days (used by Weekly Summary)
-// Partners don't have access to logs (they're private)
+// For partners, fetches the mom's logs (summary only - notes hidden in UI)
 export function useWeekLogs() {
   const { user } = useAuth();
-  const { isPartnerView } = usePartnerAccess();
+  const { isPartnerView, momUserId } = usePartnerAccess();
   
-  // Don't fetch logs for partners - they're private
-  const shouldFetch = !!user && !isPartnerView;
+  // When in partner view, fetch mom's logs; otherwise fetch own logs
+  const targetUserId = isPartnerView ? momUserId : user?.id;
 
   return useQuery({
-    queryKey: ["pregnancyLogs", "week", user?.id],
-    enabled: shouldFetch,
+    queryKey: ["pregnancyLogs", "week", targetUserId],
+    enabled: !!targetUserId,
     queryFn: async () => {
-      if (!user) return [];
+      if (!targetUserId) return [];
 
       const today = new Date();
       const sevenDaysAgo = subDays(today, 6); // Include today = 7 days total
@@ -114,7 +114,7 @@ export function useWeekLogs() {
       const { data, error } = await supabase
         .from("pregnancy_logs")
         .select("*")
-        .eq("user_id", user.id)
+        .eq("user_id", targetUserId)
         .gte("date", startDate)
         .lte("date", endDate)
         .order("date", { ascending: false })
