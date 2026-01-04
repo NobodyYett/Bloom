@@ -175,12 +175,16 @@ function RequireAuth({ children }: { children: JSX.Element }) {
   const { isProfileLoading, isOnboardingComplete } = usePregnancyState();
   const [location, navigate] = useLocation();
 
-  // Ensure profile exists - BUT NOT for partners
+  // Check if we're on the /join page - special handling needed
+  const isJoinPage = location.startsWith("/join") || window.location.pathname.startsWith("/join");
+
+  // Ensure profile exists - BUT NOT for partners OR users on /join page
   useEffect(() => {
     if (!user || authLoading || partnerLoading) return;
     
     // Partners don't need their own pregnancy profile
-    if (isPartnerView) return;
+    // Users on /join page are about to become partners - don't create profile
+    if (isPartnerView || isJoinPage) return;
 
     let cancelled = false;
 
@@ -216,7 +220,7 @@ function RequireAuth({ children }: { children: JSX.Element }) {
     return () => {
       cancelled = true;
     };
-  }, [user, authLoading, partnerLoading, isPartnerView]);
+  }, [user, authLoading, partnerLoading, isPartnerView, isJoinPage]);
 
   // Redirect logic
   useEffect(() => {
@@ -224,8 +228,8 @@ function RequireAuth({ children }: { children: JSX.Element }) {
 
     if (!user) {
       // Save current location for return after login (for /join page)
-      if (location.startsWith("/join")) {
-        sessionStorage.setItem("returnTo", location + window.location.search);
+      if (isJoinPage) {
+        sessionStorage.setItem("returnTo", window.location.pathname + window.location.search);
       }
       navigate("/login", { replace: true });
       return;
@@ -233,6 +237,9 @@ function RequireAuth({ children }: { children: JSX.Element }) {
 
     // Partners skip onboarding and profile checks
     if (isPartnerView) return;
+    
+    // Users on /join page skip onboarding - they're becoming partners
+    if (isJoinPage) return;
 
     if (isProfileLoading) return;
 
@@ -245,7 +252,20 @@ function RequireAuth({ children }: { children: JSX.Element }) {
     if (isOnboardingComplete && window.location.pathname === "/onboarding") {
       navigate("/", { replace: true });
     }
-  }, [authLoading, partnerLoading, user, isPartnerView, isProfileLoading, isOnboardingComplete, navigate, location]);
+  }, [authLoading, partnerLoading, user, isPartnerView, isJoinPage, isProfileLoading, isOnboardingComplete, navigate, location]);
+
+  // For /join page, only need auth loading check
+  if (isJoinPage) {
+    if (authLoading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center text-muted-foreground">
+          Loading...
+        </div>
+      );
+    }
+    if (!user) return null;
+    return children;
+  }
 
   if (authLoading || partnerLoading || isProfileLoading) {
     return (
