@@ -30,9 +30,13 @@ export async function hashToken(token: string): Promise<string> {
 
 /**
  * Build the full invite URL for sharing
+ * Always uses web URL (even on mobile) since partners accept via browser
  */
 export function buildInviteUrl(token: string): string {
-  return `${window.location.origin}/join?token=${encodeURIComponent(token)}`;
+  // Always use production web URL for partner invites
+  // Partners need to accept in a browser, not inside the native app
+  const webOrigin = "https://bump-planner.onrender.com";
+  return `${webOrigin}/join?token=${encodeURIComponent(token)}`;
 }
 
 /**

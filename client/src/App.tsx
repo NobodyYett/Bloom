@@ -20,13 +20,11 @@ import AiPage from "@/pages/ai";
 import JoinPage from "@/pages/join";
 
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
-import { PartnerProvider } from "@/contexts/PartnerContext";
+import { PartnerProvider, usePartnerAccess } from "@/contexts/PartnerContext";
 import { usePregnancyState } from "@/hooks/usePregnancyState";
 import { supabase } from "./lib/supabase";
 
 async function closeSafariBestEffort() {
-  // iOS can ignore close() if the controller is mid-transition.
-  // So we try immediately + once again shortly after.
   try {
     await Browser.close();
   } catch {}
@@ -38,14 +36,8 @@ async function closeSafariBestEffort() {
   }, 900);
 }
 
-/**
- * Deep Link Listener for Capacitor
- * Handles OAuth redirects when the app reopens via custom URL scheme.
- */
 function DeepLinkListener() {
   const [, navigate] = useLocation();
-
-  // Prevent duplicate processing (iOS can fire appUrlOpen more than once)
   const processedUrls = useRef<Set<string>>(new Set());
   const isHandling = useRef(false);
 
@@ -56,11 +48,9 @@ function DeepLinkListener() {
       const fullUrl = event.url || "";
       if (!fullUrl) return;
 
-      // Only handle YOUR auth callback
       if (!fullUrl.startsWith("com.bumpplanner.app://")) return;
       if (!fullUrl.includes("auth/callback")) return;
 
-      // Hard gate to stop re-entrancy
       if (isHandling.current) return;
       if (processedUrls.current.has(fullUrl)) return;
 
@@ -70,13 +60,9 @@ function DeepLinkListener() {
 
       try {
         console.log("[appUrlOpen] received:", fullUrl);
-
-        // Close Safari ASAP (best-effort)
         await closeSafariBestEffort();
 
         const url = new URL(fullUrl);
-
-        // Implicit flow: tokens come in hash
         const hash = url.hash.replace(/^#/, "");
         const hashParams = new URLSearchParams(hash);
         const accessToken = hashParams.get("access_token");
@@ -84,7 +70,6 @@ function DeepLinkListener() {
 
         if (accessToken) {
           console.log("[appUrlOpen] setting session with access_token");
-
           const { error } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken || "",
@@ -95,14 +80,11 @@ function DeepLinkListener() {
             navigate("/login", { replace: true });
           } else {
             console.log("[appUrlOpen] session set OK");
-            // Let the rest of the app load normally
             navigate("/", { replace: true });
           }
-
           return;
         }
 
-        // PKCE fallback (if ever used)
         const code = url.searchParams.get("code");
         if (code) {
           console.log("[appUrlOpen] exchanging code");
@@ -127,7 +109,6 @@ function DeepLinkListener() {
     };
 
     CapApp.addListener("appUrlOpen", handleDeepLink);
-
     return () => {
       CapApp.removeAllListeners();
     };
@@ -136,9 +117,6 @@ function DeepLinkListener() {
   return null;
 }
 
-/**
- * OAuth callback handler for web
- */
 function AuthCallback() {
   const [, navigate] = useLocation();
   const processed = useRef(false);
@@ -171,7 +149,14 @@ function AuthCallback() {
         console.error("AuthCallback failed:", err);
       }
 
-      navigate("/", { replace: true });
+      // Check if there's a return URL (e.g., from partner invite)
+      const returnTo = sessionStorage.getItem("returnTo");
+      if (returnTo) {
+        sessionStorage.removeItem("returnTo");
+        navigate(returnTo, { replace: true });
+      } else {
+        navigate("/", { replace: true });
+      }
     }
 
     handleAuthCallback();
@@ -186,12 +171,16 @@ function AuthCallback() {
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const { user, loading: authLoading } = useAuth();
+  const { isPartnerView, isLoading: partnerLoading } = usePartnerAccess();
   const { isProfileLoading, isOnboardingComplete } = usePregnancyState();
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
 
-  // Ensure profile exists
+  // Ensure profile exists - BUT NOT for partners
   useEffect(() => {
-    if (!user || authLoading) return;
+    if (!user || authLoading || partnerLoading) return;
+    
+    // Partners don't need their own pregnancy profile
+    if (isPartnerView) return;
 
     let cancelled = false;
 
@@ -227,16 +216,23 @@ function RequireAuth({ children }: { children: JSX.Element }) {
     return () => {
       cancelled = true;
     };
-  }, [user, authLoading]);
+  }, [user, authLoading, partnerLoading, isPartnerView]);
 
   // Redirect logic
   useEffect(() => {
-    if (authLoading) return;
+    if (authLoading || partnerLoading) return;
 
     if (!user) {
+      // Save current location for return after login (for /join page)
+      if (location.startsWith("/join")) {
+        sessionStorage.setItem("returnTo", location + window.location.search);
+      }
       navigate("/login", { replace: true });
       return;
     }
+
+    // Partners skip onboarding and profile checks
+    if (isPartnerView) return;
 
     if (isProfileLoading) return;
 
@@ -249,9 +245,9 @@ function RequireAuth({ children }: { children: JSX.Element }) {
     if (isOnboardingComplete && window.location.pathname === "/onboarding") {
       navigate("/", { replace: true });
     }
-  }, [authLoading, user, isProfileLoading, isOnboardingComplete, navigate]);
+  }, [authLoading, partnerLoading, user, isPartnerView, isProfileLoading, isOnboardingComplete, navigate, location]);
 
-  if (authLoading || isProfileLoading) {
+  if (authLoading || partnerLoading || isProfileLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center text-muted-foreground">
         Loading your profile...
