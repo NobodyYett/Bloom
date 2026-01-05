@@ -46,12 +46,12 @@ export default function SubscribePage() {
     {
       icon: <Users className="w-5 h-5" />,
       title: "Partner View",
-      description: "Your partner gets their own dashboard with pregnancy updates, upcoming appointments, and personalized tips on how to support you each week.",
+      description: "Your partner stays connected to your journey without you having to explain. They'll see what you're going through and know how to support you — no words needed.",
     },
     {
       icon: <ListTodo className="w-5 h-5" />,
       title: "Shared To-Do List",
-      description: "Plan together with a shared task list. Assign responsibilities, track progress, and make sure nothing falls through the cracks before baby arrives.",
+      description: "Prepare together with a shared task list. Assign responsibilities, track progress, and make sure nothing falls through the cracks before baby arrives.",
     },
     {
       icon: <Lightbulb className="w-5 h-5" />,
@@ -60,8 +60,8 @@ export default function SubscribePage() {
     },
     {
       icon: <Sparkles className="w-5 h-5" />,
-      title: "More FLO Questions",
-      description: "Ask FLO up to 5 questions per day. Get personalized guidance on symptoms, what to expect, and how to prepare — whenever you need it.",
+      title: "More Time with Ivy",
+      description: "Enjoy longer, deeper conversations with Ivy. Ask up to 5 questions daily for guidance on symptoms, what to expect, and how to prepare — whenever you need her.",
     },
   ];
 
@@ -152,10 +152,10 @@ export default function SubscribePage() {
             <Check className="w-10 h-10 text-green-600 dark:text-green-400" />
           </div>
           <h1 className="font-serif text-3xl font-bold mb-3">
-            Welcome to Premium
+            Welcome to Bloom Premium
           </h1>
           <p className="text-muted-foreground mb-6">
-            All features are now unlocked. Enjoy your journey together.
+            All features are now unlocked. You're not alone on this journey.
           </p>
           <Button onClick={() => setLocation("/")} variant="outline">
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -178,7 +178,7 @@ export default function SubscribePage() {
             </div>
             <h1 className="font-serif text-3xl font-bold mb-2">Bloom Premium</h1>
             <p className="text-muted-foreground">
-              Everything you need to prepare together
+              Feel supported. Stay connected. Prepare together.
             </p>
           </div>
 
@@ -227,7 +227,7 @@ export default function SubscribePage() {
           </div>
           <h1 className="font-serif text-3xl font-bold mb-2">Bloom Premium</h1>
           <p className="text-muted-foreground">
-            Everything you need to prepare together
+            Feel supported. Stay connected. Prepare together.
           </p>
         </div>
 

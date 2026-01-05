@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Smile, Frown, Meh, Loader2, Sun, Sunset, Moon, Zap, Battery, BatteryLow } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Smile, Frown, Meh, Loader2, Sun, Sunset, Moon, Zap, Battery, BatteryLow, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useCreatePregnancyLog, useTodayLogs } from "@/hooks/usePregnancyLogs";
@@ -60,6 +61,8 @@ export function DailyCheckIn({ currentWeek }: DailyCheckInProps) {
   const [selectedMood, setSelectedMood] = useState<"happy" | "neutral" | "sad" | null>(null);
   const [selectedEnergy, setSelectedEnergy] = useState<Energy | null>(null);
   const [selectedSymptoms, setSelectedSymptoms] = useState<string[]>([]);
+  const [customSymptoms, setCustomSymptoms] = useState("");
+  const [showCommonSymptoms, setShowCommonSymptoms] = useState(false);
   const [notes, setNotes] = useState("");
 
   useEffect(() => {
@@ -88,6 +91,17 @@ export function DailyCheckIn({ currentWeek }: DailyCheckInProps) {
       return;
     }
 
+    // Combine preset symptoms with custom symptoms
+    const allSymptoms: string[] = [...selectedSymptoms];
+    if (customSymptoms.trim()) {
+      // Split by comma if multiple, or just add the single entry
+      const customList = customSymptoms
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+      allSymptoms.push(...customList);
+    }
+
     try {
       await createLogMutation.mutateAsync({
         date: todayDate,
@@ -95,7 +109,7 @@ export function DailyCheckIn({ currentWeek }: DailyCheckInProps) {
         mood: selectedMood,
         slot: selectedSlot,
         energy: selectedEnergy ?? undefined,
-        symptoms: selectedSymptoms.length > 0 ? selectedSymptoms.join(", ") : undefined,
+        symptoms: allSymptoms.length > 0 ? allSymptoms.join(", ") : undefined,
         notes: notes.trim() ? notes.trim() : undefined,
       });
 
@@ -107,6 +121,7 @@ export function DailyCheckIn({ currentWeek }: DailyCheckInProps) {
       setSelectedMood(null);
       setSelectedEnergy(null);
       setSelectedSymptoms([]);
+      setCustomSymptoms("");
       setNotes("");
     } catch (error) {
       toast({
@@ -186,6 +201,9 @@ export function DailyCheckIn({ currentWeek }: DailyCheckInProps) {
     "flex-1 flex flex-col items-center justify-center gap-1 py-2 rounded-lg border transition-all min-w-0";
   const energyBtnInactive = "border-border hover:bg-muted text-muted-foreground";
   const energyBtnActive = "border-amber-400 bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400";
+
+  // Count of selected symptoms for badge
+  const selectedCount = selectedSymptoms.length;
 
   return (
     <div className={cardClass}>
@@ -290,23 +308,55 @@ export function DailyCheckIn({ currentWeek }: DailyCheckInProps) {
 
       <div className="mt-4 space-y-2">
         <div className="text-xs font-medium">Symptoms (optional)</div>
-        <div className="flex flex-wrap gap-2">
-          {SYMPTOM_CHIPS.map((symptom) => (
-            <button
-              key={symptom}
-              type="button"
-              onClick={() => toggleSymptom(symptom)}
-              className={cn(
-                "px-3 py-1.5 text-xs rounded-full border transition-all",
-                selectedSymptoms.includes(symptom)
-                  ? "bg-primary/10 border-primary text-primary"
-                  : "border-border hover:bg-muted text-muted-foreground"
-              )}
-            >
-              {symptom}
-            </button>
-          ))}
-        </div>
+        
+        {/* Custom symptoms input */}
+        <Input
+          value={customSymptoms}
+          onChange={(e) => setCustomSymptoms(e.target.value)}
+          placeholder="How are you feeling? (e.g., Energetic, Anxious, Baby kicking!)"
+          className="bg-background text-sm"
+        />
+        
+        {/* Collapsible common symptoms */}
+        <button
+          type="button"
+          onClick={() => setShowCommonSymptoms(!showCommonSymptoms)}
+          className="flex items-center justify-between w-full px-3 py-2 text-xs text-muted-foreground hover:bg-muted rounded-lg border border-border transition-colors"
+        >
+          <span className="flex items-center gap-2">
+            Common symptoms
+            {selectedCount > 0 && (
+              <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-medium bg-primary/10 text-primary rounded-full">
+                {selectedCount} selected
+              </span>
+            )}
+          </span>
+          {showCommonSymptoms ? (
+            <ChevronUp className="w-4 h-4" />
+          ) : (
+            <ChevronDown className="w-4 h-4" />
+          )}
+        </button>
+        
+        {showCommonSymptoms && (
+          <div className="flex flex-wrap gap-2 pt-1">
+            {SYMPTOM_CHIPS.map((symptom) => (
+              <button
+                key={symptom}
+                type="button"
+                onClick={() => toggleSymptom(symptom)}
+                className={cn(
+                  "px-3 py-1.5 text-xs rounded-full border transition-all",
+                  selectedSymptoms.includes(symptom)
+                    ? "bg-primary/10 border-primary text-primary"
+                    : "border-border hover:bg-muted text-muted-foreground"
+                )}
+              >
+                {symptom}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="mt-4 space-y-2">
