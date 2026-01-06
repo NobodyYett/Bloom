@@ -30,8 +30,11 @@ export default function Login() {
 
       // CRITICAL: Always use canonical domain for OAuth redirects
       // This prevents redirect leakage if users access via legacy domains
-      const CANONICAL_WEB_ORIGIN = import.meta.env.VITE_PUBLIC_WEB_ORIGIN || "https://bloom.zelkzonline.com";
-      
+      const CANONICAL_WEB_ORIGIN = import.meta.env.DEV 
+  ? window.location.origin 
+  : (import.meta.env.VITE_PUBLIC_WEB_ORIGIN || "https://bloom.zelkzonline.com");
+
+  
       // Use custom URL scheme for mobile deep link callback
       const redirectTo = Capacitor.isNativePlatform()
         ? "com.zelkz.bloom://auth/callback"
