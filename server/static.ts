@@ -61,6 +61,25 @@ export function serveStatic(app: Express) {
     }),
   );
 
+  // Serve legal pages directly (before SPA fallback)
+  app.get("/privacy.html", (req, res) => {
+    const privacyPath = path.join(distPath, "privacy.html");
+    if (fs.existsSync(privacyPath)) {
+      res.sendFile(privacyPath);
+    } else {
+      res.status(404).send("Privacy policy not found");
+    }
+  });
+
+  app.get("/terms.html", (req, res) => {
+    const termsPath = path.join(distPath, "terms.html");
+    if (fs.existsSync(termsPath)) {
+      res.sendFile(termsPath);
+    } else {
+      res.status(404).send("Terms of service not found");
+    }
+  });
+
   // SPA fallback (but NEVER hijack /api or /assets or /.well-known)
   app.get("*", (req, res, next) => {
     if (req.path.startsWith("/api")) return next();
