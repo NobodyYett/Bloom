@@ -16,7 +16,7 @@ dependencies {
     implementation project(':capacitor-local-notifications')
     implementation project(':capacitor-share')
     implementation project(':revenuecat-purchases-capacitor')
-
+    implementation "com.android.billingclient:billing:7.1.1"
 }
 
 

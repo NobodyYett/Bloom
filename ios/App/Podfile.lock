@@ -15,6 +15,8 @@ PODS:
     - Capacitor
   - CapacitorShare (7.0.3):
     - Capacitor
+  - CordovaPlugins (7.4.4):
+    - CapacitorCordova
   - IONFilesystemLib (1.0.1)
   - PurchasesHybridCommon (13.26.0):
     - RevenueCat (= 5.20.0)
@@ -32,6 +34,7 @@ DEPENDENCIES:
   - "CapacitorFilesystem (from `../../node_modules/@capacitor/filesystem`)"
   - "CapacitorLocalNotifications (from `../../node_modules/@capacitor/local-notifications`)"
   - "CapacitorShare (from `../../node_modules/@capacitor/share`)"
+  - CordovaPlugins (from `../capacitor-cordova-ios-plugins`)
   - "RevenuecatPurchasesCapacitor (from `../../node_modules/@revenuecat/purchases-capacitor`)"
 
 SPEC REPOS:
@@ -57,6 +60,8 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/@capacitor/local-notifications"
   CapacitorShare:
     :path: "../../node_modules/@capacitor/share"
+  CordovaPlugins:
+    :path: "../capacitor-cordova-ios-plugins"
   RevenuecatPurchasesCapacitor:
     :path: "../../node_modules/@revenuecat/purchases-capacitor"
 
@@ -69,11 +74,12 @@ SPEC CHECKSUMS:
   CapacitorFilesystem: 66f05ee0d8b1ccdc00d509091273a9b3b57c4a0b
   CapacitorLocalNotifications: ba2a08bd92887b08f352e6b2db430575cef0cea3
   CapacitorShare: a4f4f86eabd4b3ff52ba6a11b754713c6926a8d1
+  CordovaPlugins: 46e6f7272fc84c91b63b894a9ad321e82c463564
   IONFilesystemLib: 89258b8e3e85465da93127d25d7ce37f977e8a6f
   PurchasesHybridCommon: fa166fc8b385cf80f581f923c91d8ccffe5dd7f8
   RevenueCat: e47ff90dfd271fde155a4befe48e8fc02e8281e4
   RevenuecatPurchasesCapacitor: 6727a4dc1455bdf2374259420719ce5dfbe957fa
 
-PODFILE CHECKSUM: 17aebc2d7e624a41dc42b076fb86561b2503f46b
+PODFILE CHECKSUM: d942bc43b05288d02a52d1b18dcab7838e8f7596
 
 COCOAPODS: 1.16.2

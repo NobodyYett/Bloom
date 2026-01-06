@@ -13,7 +13,8 @@ import { cn } from "@/lib/utils";
 import { format, differenceInDays } from "date-fns";
 import { 
   Loader2, Save, Trash2, AlertTriangle, Sun, Moon, Monitor, Bell, 
-  Users, Copy, Check, Link2, Clock, Calendar, Lightbulb, ExternalLink
+  Users, Copy, Check, Link2, Clock, Calendar, Lightbulb, ExternalLink,
+  HelpCircle, Mail, Bug, FileText, ChevronRight
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme, type ThemeMode } from "@/theme/theme-provider";
@@ -769,21 +770,46 @@ export default function SettingsPage() {
           </section>
         )}
 
-        {/* Legal Section */}
+        {/* Help Section */}
         <section className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-border bg-muted/30">
             <h2 className="text-lg font-semibold flex items-center gap-2">
-              <ExternalLink className="w-5 h-5" />
-              Legal
+              <HelpCircle className="w-5 h-5" />
+              Help
             </h2>
           </div>
           <div className="divide-y divide-border">
             <button
               type="button"
+              onClick={() => window.open('mailto:support@zelkz.com?subject=Bloom Support Request', '_blank')}
+              className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/50 transition-colors text-left"
+            >
+              <span className="flex items-center gap-3">
+                <Mail className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm">Contact Support</span>
+              </span>
+              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+            </button>
+            <button
+              type="button"
+              onClick={() => window.open('mailto:support@zelkz.com?subject=Bloom Bug Report', '_blank')}
+              className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/50 transition-colors text-left"
+            >
+              <span className="flex items-center gap-3">
+                <Bug className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm">Report a Bug</span>
+              </span>
+              <ChevronRight className="w-4 h-4 text-muted-foreground" />
+            </button>
+            <button
+              type="button"
               onClick={() => window.open('/privacy.html', '_blank')}
               className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/50 transition-colors text-left"
             >
-              <span className="text-sm">Privacy Policy</span>
+              <span className="flex items-center gap-3">
+                <FileText className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm">Privacy Policy</span>
+              </span>
               <ExternalLink className="w-4 h-4 text-muted-foreground" />
             </button>
             <button
@@ -791,9 +817,15 @@ export default function SettingsPage() {
               onClick={() => window.open('/terms.html', '_blank')}
               className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/50 transition-colors text-left"
             >
-              <span className="text-sm">Terms of Service</span>
+              <span className="flex items-center gap-3">
+                <FileText className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm">Terms of Service</span>
+              </span>
               <ExternalLink className="w-4 h-4 text-muted-foreground" />
             </button>
+          </div>
+          <div className="px-6 py-3 bg-muted/20 text-center">
+            <p className="text-xs text-muted-foreground">Bloom v1.0.0 • by Zelkz</p>
           </div>
         </section>
 
