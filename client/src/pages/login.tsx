@@ -156,8 +156,22 @@ export default function Login() {
         </div>
 
         <p className="mt-6 text-[11px] text-center text-muted-foreground leading-relaxed">
-          By continuing, you agree that Bloom may store your due date and
-          pregnancy check-ins securely so you can access them from any device.
+          By continuing, you agree to our{" "}
+          <button 
+            type="button"
+            onClick={() => window.open('/terms.html', '_blank')} 
+            className="underline hover:text-foreground"
+          >
+            Terms of Service
+          </button>{" "}
+          and{" "}
+          <button 
+            type="button"
+            onClick={() => window.open('/privacy.html', '_blank')} 
+            className="underline hover:text-foreground"
+          >
+            Privacy Policy
+          </button>.
         </p>
       </div>
     </div>

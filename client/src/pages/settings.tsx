@@ -13,8 +13,7 @@ import { cn } from "@/lib/utils";
 import { format, differenceInDays } from "date-fns";
 import { 
   Loader2, Save, Trash2, AlertTriangle, Sun, Moon, Monitor, Bell, 
-  Users, Copy, Check, Link2, Clock, Calendar, Lightbulb, ExternalLink,
-  HelpCircle, FileText, Bug, Mail, ChevronRight
+  Users, Copy, Check, Link2, Clock, Calendar, Lightbulb, ExternalLink
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useTheme, type ThemeMode } from "@/theme/theme-provider";
@@ -266,6 +265,7 @@ export default function SettingsPage() {
   function handleTaskSuggestionsToggle(enabled: boolean) {
     setTaskSuggestionsEnabled(enabled);
     localStorage.setItem("bloom_show_task_suggestions", enabled ? "true" : "false");
+    // Dispatch custom event for same-tab updates
     window.dispatchEvent(new Event("taskSuggestionsChanged"));
     toast({
       title: enabled ? "Suggestions enabled" : "Suggestions disabled",
@@ -451,6 +451,7 @@ export default function SettingsPage() {
             <p className="text-sm text-muted-foreground">Manage your reminder preferences.</p>
           </div>
           <div className="p-6 space-y-6">
+            {/* Morning Check-in */}
             <div className="flex items-center justify-between">
               <div className="space-y-1">
                 <label className="text-sm font-medium">Morning check-in</label>
@@ -468,6 +469,7 @@ export default function SettingsPage() {
               />
             </div>
 
+            {/* Evening Check-in - only for mom */}
             {!isPartnerView && (
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
@@ -487,6 +489,7 @@ export default function SettingsPage() {
               </div>
             )}
 
+            {/* Appointment Reminders */}
             <div className="pt-4 border-t border-border">
               <div className="flex items-center justify-between mb-4">
                 <div className="space-y-1">
@@ -766,64 +769,31 @@ export default function SettingsPage() {
           </section>
         )}
 
-        {/* Help */}
+        {/* Legal Section */}
         <section className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-          <div className="bg-muted/30 px-6 py-4 border-b border-border">
+          <div className="px-6 py-4 border-b border-border bg-muted/30">
             <h2 className="text-lg font-semibold flex items-center gap-2">
-              <HelpCircle className="w-5 h-5" />
-              Help
+              <ExternalLink className="w-5 h-5" />
+              Legal
             </h2>
           </div>
           <div className="divide-y divide-border">
-            <a
-              href="mailto:support@zelkzllc.com"
-              className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors"
+            <button
+              type="button"
+              onClick={() => window.open('/privacy.html', '_blank')}
+              className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/50 transition-colors text-left"
             >
-              <div className="flex items-center gap-3">
-                <Mail className="h-5 w-5 text-muted-foreground" />
-                <span className="text-sm font-medium">Contact Support</span>
-              </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            </a>
-            <a
-              href="mailto:support@zelkzllc.com?subject=Bug%20Report%20-%20Bloom%20App&body=Please%20describe%20the%20issue%3A%0A%0A%0ASteps%20to%20reproduce%3A%0A1.%0A2.%0A3.%0A%0ADevice%3A%0A"
-              className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors"
+              <span className="text-sm">Privacy Policy</span>
+              <ExternalLink className="w-4 h-4 text-muted-foreground" />
+            </button>
+            <button
+              type="button"
+              onClick={() => window.open('/terms.html', '_blank')}
+              className="w-full flex items-center justify-between px-6 py-4 hover:bg-muted/50 transition-colors text-left"
             >
-              <div className="flex items-center gap-3">
-                <Bug className="h-5 w-5 text-muted-foreground" />
-                <span className="text-sm font-medium">Report a Bug</span>
-              </div>
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            </a>
-            <a
-              href="https://nobodyyett.github.io/zelkz.github.io/privacy.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <FileText className="h-5 w-5 text-muted-foreground" />
-                <span className="text-sm font-medium">Privacy Policy</span>
-              </div>
-              <ExternalLink className="h-4 w-4 text-muted-foreground" />
-            </a>
-            <a
-              href="https://nobodyyett.github.io/zelkz.github.io/terms.html"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors"
-            >
-              <div className="flex items-center gap-3">
-                <FileText className="h-5 w-5 text-muted-foreground" />
-                <span className="text-sm font-medium">Terms of Service</span>
-              </div>
-              <ExternalLink className="h-4 w-4 text-muted-foreground" />
-            </a>
-          </div>
-          <div className="bg-muted/30 px-6 py-3 border-t border-border">
-            <p className="text-xs text-muted-foreground text-center">
-              Bloom v1.0.0 • by Zelkz
-            </p>
+              <span className="text-sm">Terms of Service</span>
+              <ExternalLink className="w-4 h-4 text-muted-foreground" />
+            </button>
           </div>
         </section>
 

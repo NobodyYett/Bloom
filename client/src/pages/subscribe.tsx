@@ -46,12 +46,12 @@ export default function SubscribePage() {
     {
       icon: <Users className="w-5 h-5" />,
       title: "Partner View",
-      description: "Your partner stays connected to your journey without you having to explain. They'll see what you're going through and know how to support you — no words needed.",
+      description: "Your partner gets their own dashboard with pregnancy updates, upcoming appointments, and personalized tips on how to support you each week.",
     },
     {
       icon: <ListTodo className="w-5 h-5" />,
       title: "Shared To-Do List",
-      description: "Prepare together with a shared task list. Assign responsibilities, track progress, and make sure nothing falls through the cracks before baby arrives.",
+      description: "Plan together with a shared task list. Assign responsibilities, track progress, and make sure nothing falls through the cracks before baby arrives.",
     },
     {
       icon: <Lightbulb className="w-5 h-5" />,
@@ -60,8 +60,8 @@ export default function SubscribePage() {
     },
     {
       icon: <Sparkles className="w-5 h-5" />,
-      title: "More Time with Ivy",
-      description: "Enjoy longer, deeper conversations with Ivy. Ask up to 5 questions daily for guidance on symptoms, what to expect, and how to prepare — whenever you need her.",
+      title: "More Ivy Questions",
+      description: "Ask Ivy up to 5 questions per day. Get personalized guidance on symptoms, what to expect, and how to prepare — whenever you need it.",
     },
   ];
 
@@ -152,10 +152,10 @@ export default function SubscribePage() {
             <Check className="w-10 h-10 text-green-600 dark:text-green-400" />
           </div>
           <h1 className="font-serif text-3xl font-bold mb-3">
-            Welcome to Bloom Premium
+            Welcome to Premium
           </h1>
           <p className="text-muted-foreground mb-6">
-            All features are now unlocked. You're not alone on this journey.
+            All features are now unlocked. Enjoy your journey together.
           </p>
           <Button onClick={() => setLocation("/")} variant="outline">
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -178,7 +178,7 @@ export default function SubscribePage() {
             </div>
             <h1 className="font-serif text-3xl font-bold mb-2">Bloom Premium</h1>
             <p className="text-muted-foreground">
-              Feel supported. Stay connected. Prepare together.
+              Everything you need to prepare together
             </p>
           </div>
 
@@ -227,7 +227,7 @@ export default function SubscribePage() {
           </div>
           <h1 className="font-serif text-3xl font-bold mb-2">Bloom Premium</h1>
           <p className="text-muted-foreground">
-            Feel supported. Stay connected. Prepare together.
+            Everything you need to prepare together
           </p>
         </div>
 
@@ -348,6 +348,25 @@ export default function SubscribePage() {
           automatically renews unless cancelled at least 24 hours before the end
           of the current period.
         </p>
+
+        {/* Legal links - required by App Store */}
+        <div className="flex justify-center gap-4 text-xs text-muted-foreground mt-4">
+          <button 
+            type="button"
+            onClick={() => window.open('/privacy.html', '_blank')} 
+            className="underline hover:text-foreground transition-colors"
+          >
+            Privacy Policy
+          </button>
+          <span>•</span>
+          <button 
+            type="button"
+            onClick={() => window.open('/terms.html', '_blank')} 
+            className="underline hover:text-foreground transition-colors"
+          >
+            Terms of Service
+          </button>
+        </div>
 
         {/* Back button */}
         <div className="mt-6 text-center">
