@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getMomTip } from "@/lib/pregnancy-data";
+import { getInfancyMomTip, getInfancyPartnerTip, getInfantWeekData } from "@/lib/infancy-data";
 import { Info, Loader2 } from "lucide-react";
 import {
   canAskAi,
@@ -10,6 +11,8 @@ import {
   getRemainingAiQuestions,
   getAiDailyLimit,
 } from "@/lib/aiLimits";
+import { useFeedingInsights, getFeedingContextForAI } from "@/hooks/useFeedingInsights";
+import { usePremium } from "@/contexts/PremiumContext";
 
 export interface CheckinContext {
   slot?: string;
@@ -22,19 +25,46 @@ interface WeeklyWisdomProps {
   currentWeek: number;
   trimester: 1 | 2 | 3;
   checkinContext?: CheckinContext | null;
+  appMode?: "pregnancy" | "infancy";
+  isPartnerView?: boolean;
 }
 
-export function WeeklyWisdom({ currentWeek, trimester, checkinContext }: WeeklyWisdomProps) {
+export function WeeklyWisdom({ 
+  currentWeek, 
+  trimester, 
+  checkinContext, 
+  appMode = "pregnancy",
+  isPartnerView = false 
+}: WeeklyWisdomProps) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // AI limits (TODO: replace with actual subscription check)
-  const isPaid = false;
+  // Get household-level premium (uses mom's premium in partner view)
+  const { effectiveIsPremium } = usePremium();
+  const isPaid = effectiveIsPremium;
   const [remaining, setRemaining] = useState(() => getRemainingAiQuestions(isPaid));
 
-  const momTip = getMomTip(currentWeek);
+  // Sync remaining questions when premium status changes (e.g., after purchase or context loads)
+  useEffect(() => {
+    setRemaining(getRemainingAiQuestions(isPaid));
+  }, [isPaid]);
+
+  // Get baby insights for infancy mode (to include in AI context)
+  const { data: feedingInsights } = useFeedingInsights();
+
+  // Get appropriate content based on mode and viewer
+  const isInfancy = appMode === "infancy";
+  
+  // Infant data (shared between both parents)
+  const infantWeekData = isInfancy ? getInfantWeekData(currentWeek) : null;
+  
+  // Personal tip (viewer-specific)
+  const personalTip = isInfancy
+    ? (isPartnerView ? getInfancyPartnerTip(currentWeek) : getInfancyMomTip(currentWeek))
+    : getMomTip(currentWeek);
+    
   const limitReached = !canAskAi(isPaid);
   const dailyLimit = getAiDailyLimit(isPaid);
 
@@ -52,9 +82,22 @@ export function WeeklyWisdom({ currentWeek, trimester, checkinContext }: WeeklyW
     setErrorMsg(null);
     setAnswer(null);
 
-    // Build context-aware prompt (not shown to user)
+    // Build context-aware prompt based on mode
     const contextParts: string[] = [];
-    contextParts.push(`The user is in week ${currentWeek} of their pregnancy (trimester ${trimester}).`);
+    
+    if (appMode === "infancy") {
+      contextParts.push(`The user has a ${currentWeek}-week-old baby.`);
+      
+      // Add feeding/nap insights for infancy mode
+      if (feedingInsights) {
+        const feedingContext = getFeedingContextForAI(feedingInsights);
+        if (feedingContext) {
+          contextParts.push(feedingContext);
+        }
+      }
+    } else {
+      contextParts.push(`The user is in week ${currentWeek} of their pregnancy (trimester ${trimester}).`);
+    }
 
     if (checkinContext) {
       if (checkinContext.slot) {
@@ -81,13 +124,17 @@ export function WeeklyWisdom({ currentWeek, trimester, checkinContext }: WeeklyW
       }
     }
 
+    const weekContext = appMode === "infancy" 
+      ? `week ${currentWeek} of baby's life`
+      : `week ${currentWeek} of pregnancy`;
+
     const enhancedPrompt = `
 ${contextParts.join(" ")}
 
 User's question: ${question}
 
 Please respond in this exact structure:
-1. **What's commonly normal:** Brief reassurance about whether this is typical for week ${currentWeek} and the described symptoms/feelings
+1. **What's commonly normal:** Brief reassurance about whether this is typical for ${weekContext} and the described symptoms/feelings
 2. **What to try today:** 2-3 practical, gentle suggestions
 3. **When to contact your provider:** Clear signs that warrant a call (non-alarmist)
 4. **One clarifying question:** (optional) If helpful, ask one follow-up
@@ -114,50 +161,75 @@ Keep your tone warm, supportive, and calm. Avoid medical jargon.
     setAnswer(data?.answer ?? "Ivy answered, but something looked empty.");
   }
 
+  const subtitleText = appMode === "infancy"
+    ? "A quick check-in for new parents this week."
+    : "A quick check-in just for you this week.";
+
+  const placeholderText = appMode === "infancy"
+    ? "Is this normal for my baby? What can I try?"
+    : "Is this normal? What can I try?";
+
   return (
-    <section className="bg-primary/10 rounded-3xl border border-primary/20 px-6 py-6 md:px-10 md:py-8">
+    <section className="bg-secondary/40 rounded-3xl border border-border/60 px-6 py-6 md:px-10 md:py-8">
       {/* Header */}
       <div className="flex items-center justify-between gap-3 mb-3">
         <div>
-          <h2 className="font-serif text-xl md:text-2xl font-semibold text-primary">
+          <h2 className="font-serif text-xl md:text-2xl font-semibold text-foreground">
             Weekly Wisdom
           </h2>
-          <p className="text-[11px] text-primary/70 mt-1">
-            A quick check-in just for you this week.
+          <p className="text-[11px] text-muted-foreground mt-1">
+            {subtitleText}
           </p>
         </div>
-        <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-3 py-1 text-[10px] font-medium text-primary">
+        <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 border border-border/50 px-3 py-1 text-[10px] font-medium text-muted-foreground">
           <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
           Powered by Ivy
         </span>
       </div>
 
-      {/* Mom-focused tip text */}
-      <p className="text-sm md:text-base text-primary/80 leading-relaxed mb-4">
-        {momTip}
-      </p>
+      {/* Content section */}
+      {isInfancy && infantWeekData ? (
+        <div className="space-y-3 mb-4">
+          {/* Baby insight - shared, both parents see this */}
+          <div className="space-y-1">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+              Your Baby This Week
+            </p>
+            <p className="text-sm md:text-base text-foreground leading-relaxed">
+              {infantWeekData.babyInsight}
+            </p>
+          </div>
+        </div>
+      ) : (
+        /* Pregnancy mode - single tip */
+        <p className="text-sm md:text-base text-foreground leading-relaxed mb-4">
+          {personalTip}
+        </p>
+      )}
 
       {/* Ask Ivy input */}
       <form
         onSubmit={handleAsk}
-        className="mt-2 flex flex-col gap-3 border-t border-primary/20 pt-4"
+        className="mt-2 flex flex-col gap-3 border-t border-border/60 pt-4"
       >
-        <p className="text-[11px] text-primary/80">
-          Questions about this week, how you're feeling, or what to expect? Ask Ivy below.
+        <p className="text-[11px] text-muted-foreground">
+          {appMode === "infancy" 
+            ? "Questions about your baby, how you're adjusting, or what to expect? Ask Ivy below."
+            : "Questions about this week, how you're feeling, or what to expect? Ask Ivy below."}
         </p>
 
         <div className="flex flex-col md:flex-row gap-2">
           <Input
-            placeholder="Is this normal? What can I try?"
+            placeholder={placeholderText}
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
-            className="flex-1 text-sm"
+            className="flex-1 text-sm text-foreground placeholder:text-muted-foreground"
             disabled={limitReached}
           />
           <Button
             type="submit"
             disabled={loading || limitReached || !question.trim()}
-            className="md:w-28 shrink-0"
+            className="md:w-28 shrink-0 bg-primary text-primary-foreground hover:bg-primary/90"
           >
             {loading ? (
               <>
@@ -172,18 +244,18 @@ Keep your tone warm, supportive, and calm. Avoid medical jargon.
 
         {/* Usage indicator */}
         <div className="flex items-center justify-between text-[11px]">
-          <span className="text-primary/60">
+          <span className="text-muted-foreground">
             {remaining} of {dailyLimit} question{dailyLimit !== 1 ? "s" : ""} remaining today
           </span>
           {!isPaid && remaining === 0 && (
-            <Button variant="link" size="sm" className="text-primary p-0 h-auto text-[11px]">
+            <Button variant="link" size="sm" className="text-foreground p-0 h-auto text-[11px]">
               Upgrade for more
             </Button>
           )}
         </div>
 
         {/* Subtle disclaimer */}
-        <div className="flex items-start gap-1.5 text-[10px] text-primary/50">
+        <div className="flex items-start gap-1.5 text-[10px] text-muted-foreground">
           <Info className="w-3 h-3 shrink-0 mt-0.5" />
           <p>
             Ivy is here to support you — not replace medical care. If something feels urgent, contact your provider or emergency services.
@@ -193,11 +265,11 @@ Keep your tone warm, supportive, and calm. Avoid medical jargon.
 
       {/* Limit reached message */}
       {limitReached && (
-        <div className="mt-3 text-center py-3 rounded-xl bg-primary/5 border border-primary/10">
-          <p className="text-sm text-primary/70">You've reached today's question limit.</p>
+        <div className="mt-3 text-center py-3 rounded-xl bg-muted border border-border">
+          <p className="text-sm text-foreground">You've reached today's question limit.</p>
           {!isPaid && (
-            <p className="text-xs text-primary/60 mt-1">
-              <Button variant="link" className="text-primary p-0 h-auto text-xs">
+            <p className="text-xs text-muted-foreground mt-1">
+              <Button variant="link" className="text-foreground p-0 h-auto text-xs">
                 Upgrade to Premium
               </Button>{" "}
               for 5 questions per day.
@@ -211,14 +283,14 @@ Keep your tone warm, supportive, and calm. Avoid medical jargon.
       )}
 
       {answer && (
-        <div className="mt-3 rounded-2xl bg-primary/5 border border-primary/20 px-4 py-3">
-          <p className="text-[11px] uppercase tracking-[0.2em] text-primary/70 mb-1">
+        <div className="mt-3 rounded-2xl bg-muted border border-border px-4 py-3">
+          <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground mb-1">
             Ivy's reply
           </p>
-          <p className="text-sm leading-relaxed whitespace-pre-wrap">
+          <p className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">
             {answer}
           </p>
-          <p className="mt-2 text-[10px] text-primary/70">
+          <p className="mt-2 text-[10px] text-muted-foreground">
             Ivy shares general education & emotional support only. For anything medical or urgent, please contact your healthcare provider.
           </p>
         </div>

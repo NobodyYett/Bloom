@@ -13,6 +13,7 @@ import {
 } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
+import { usePartnerAccess } from "@/contexts/PartnerContext";
 import {
   initializePurchases,
   getCustomerInfo,
@@ -32,6 +33,8 @@ import {
 interface PremiumContextValue {
   /** User has active premium subscription */
   isPremium: boolean;
+  /** Household-level premium (uses mom's premium when in partner view) */
+  effectiveIsPremium: boolean;
   /** Loading initial state */
   isLoading: boolean;
   /** Full customer info from RevenueCat */
@@ -60,6 +63,7 @@ interface PremiumProviderProps {
 
 export function PremiumProvider({ children }: PremiumProviderProps) {
   const { user } = useAuth();
+  const { isPartnerView, momIsPremium, momUserId } = usePartnerAccess();
   
   const [isPremium, setIsPremium] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -67,6 +71,8 @@ export function PremiumProvider({ children }: PremiumProviderProps) {
   const [initialized, setInitialized] = useState(false);
   
   const canPurchase = isNativePlatform();
+  
+  console.log("[Premium] PremiumProvider render, canPurchase:", canPurchase);
 
   // Sync premium status to Supabase for server-side enforcement (ask-ivy limits)
   const syncPremiumToSupabase = useCallback(async (premium: boolean) => {
@@ -97,26 +103,31 @@ export function PremiumProvider({ children }: PremiumProviderProps) {
 
   // Update premium status from customer info
   const updatePremiumStatus = useCallback((info: CustomerInfo | null) => {
+    console.log("[Premium] updatePremiumStatus called with info:", info);
     setCustomerInfo(info);
     const hasPremium = hasEntitlement(info, ENTITLEMENT_ID);
+    console.log("[Premium] hasPremium:", hasPremium);
     setIsPremium(hasPremium);
     
-    // Auto-sync to Supabase when premium status changes
-    if (user?.id) {
+    // Auto-sync to Supabase when premium status changes (only for mom, not partner)
+    if (user?.id && !isPartnerView) {
       syncPremiumToSupabase(hasPremium);
     }
-  }, [user?.id, syncPremiumToSupabase]);
+  }, [user?.id, isPartnerView, syncPremiumToSupabase]);
 
   // Refresh entitlement from RevenueCat (native) or Supabase (web)
   const refreshEntitlement = useCallback(async () => {
+    console.log("[Premium] refreshEntitlement called, canPurchase:", canPurchase);
+    
     if (!canPurchase) {
-      // Web: refresh from Supabase
-      if (user?.id) {
+      // Web: refresh from Supabase (use mom's profile when in partner view)
+      const profileId = isPartnerView ? momUserId : user?.id;
+      if (profileId) {
         try {
           const { data } = await supabase
             .from("profiles")
             .select("is_premium")
-            .eq("id", user.id)
+            .eq("id", profileId)
             .single();
           
           setIsPremium(data?.is_premium === true);
@@ -136,12 +147,17 @@ export function PremiumProvider({ children }: PremiumProviderProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [canPurchase, user?.id, updatePremiumStatus]);
+  }, [canPurchase, user?.id, isPartnerView, momUserId, updatePremiumStatus]);
 
   // Initialize RevenueCat on mount (native) or check Supabase (web)
   useEffect(() => {
     async function init() {
+      console.log("[Premium] Init useEffect starting");
+      console.log("[Premium] canPurchase:", canPurchase);
+      console.log("[Premium] user?.id:", user?.id);
+      
       if (!canPurchase) {
+        console.log("[Premium] Not native platform, skipping RevenueCat init");
         // Web: Check Supabase for premium status (purchased on mobile)
         if (user?.id) {
           try {
@@ -164,10 +180,14 @@ export function PremiumProvider({ children }: PremiumProviderProps) {
         return;
       }
 
+      console.log("[Premium] Calling initializePurchases...");
       const success = await initializePurchases();
+      console.log("[Premium] initializePurchases returned:", success);
+      
       if (success) {
         setInitialized(true);
       } else {
+        console.log("[Premium] initializePurchases failed, setting isLoading false");
         setIsLoading(false);
       }
     }
@@ -178,17 +198,25 @@ export function PremiumProvider({ children }: PremiumProviderProps) {
   // Login/logout user when auth changes
   useEffect(() => {
     async function syncUser() {
-      if (!initialized || !canPurchase) return;
+      console.log("[Premium] syncUser useEffect, initialized:", initialized, "canPurchase:", canPurchase, "user:", user?.id);
+      
+      if (!initialized || !canPurchase) {
+        console.log("[Premium] syncUser skipping - not initialized or not native");
+        return;
+      }
 
       setIsLoading(true);
 
       try {
         if (user?.id) {
           // Login to RevenueCat with user ID
+          console.log("[Premium] Logging in user to RevenueCat:", user.id);
           const info = await loginUser(user.id);
+          console.log("[Premium] loginUser returned:", info);
           updatePremiumStatus(info);
         } else {
           // Logout from RevenueCat
+          console.log("[Premium] Logging out from RevenueCat");
           const info = await logoutUser();
           updatePremiumStatus(info);
         }
@@ -210,7 +238,7 @@ export function PremiumProvider({ children }: PremiumProviderProps) {
 
     async function setupListener() {
       cleanup = await addCustomerInfoListener((info) => {
-        console.log("[Premium] Customer info updated");
+        console.log("[Premium] Customer info updated via listener");
         updatePremiumStatus(info);
       });
     }
@@ -222,8 +250,21 @@ export function PremiumProvider({ children }: PremiumProviderProps) {
     };
   }, [initialized, canPurchase, updatePremiumStatus]);
 
+  // Dev-only premium override for local testing
+  const devForcePremium = import.meta.env.DEV && import.meta.env.VITE_FORCE_PREMIUM === "true";
+  
+  useEffect(() => {
+    if (devForcePremium) {
+      console.warn("[Premium] DEV OVERRIDE: Forcing premium=true via VITE_FORCE_PREMIUM");
+    }
+  }, [devForcePremium]);
+
+  const finalIsPremium = devForcePremium || isPremium;
+  const finalEffectiveIsPremium = devForcePremium || (isPartnerView ? (momIsPremium ?? false) : isPremium);
+
   const value: PremiumContextValue = {
-    isPremium,
+    isPremium: finalIsPremium,
+    effectiveIsPremium: finalEffectiveIsPremium,
     isLoading,
     customerInfo,
     refreshEntitlement,

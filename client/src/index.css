@@ -57,87 +57,97 @@
 }
 
 :root {
-  /* Soft & Serene Palette */
-  /* Sage Green, Soft Peach, Warm Cream */
-  
-  --background: 40 33% 97%; /* Warm Cream */
-  --foreground: 210 20% 25%; /* Soft Dark Slate */
+  --background: 40 30% 97%;
+  --foreground: 220 18% 18%;
 
   --card: 0 0% 100%;
-  --card-foreground: 210 20% 25%;
+  --card-foreground: 220 18% 18%;
 
   --popover: 0 0% 100%;
-  --popover-foreground: 210 20% 25%;
+  --popover-foreground: 220 18% 18%;
 
-  --primary: 150 25% 45%; /* Sage Green */
-  --primary-foreground: 0 0% 100%;
+  /* Brand accent: warm terracotta/caramel for buttons and accents */
+  --primary: 25 45% 45%;
+  --primary-foreground: 40 30% 98%;
+  --primary-hover: 25 42% 40%;
+  --primary-press: 25 40% 36%;
+  --primary-soft: 35 30% 92%;
+  --primary-border: 30 25% 70%;
 
-  --secondary: 25 70% 85%; /* Soft Peach */
-  --secondary-foreground: 25 30% 30%;
+  /* Secondary: warm cream/beige matching sidebar - NOT pink */
+  --secondary: 30 55% 75%;
+  --secondary-foreground: 220 18% 18%;
 
-  --muted: 40 20% 92%;
-  --muted-foreground: 210 10% 50%;
+  --muted: 40 25% 93%;
+  --muted-foreground: 220 12% 38%;
 
-  --accent: 270 30% 90%; /* Soft Lavender */
+  --accent: 270 30% 90%;
   --accent-foreground: 270 30% 30%;
 
-  --destructive: 0 60% 65%;
+  --destructive: 0 60% 55%;
   --destructive-foreground: 0 0% 100%;
 
-  --border: 40 10% 85%;
-  --input: 40 10% 85%;
-  --ring: 150 25% 45%;
+  --border: 40 20% 82%;
+  --input: 40 20% 82%;
+  --ring: 25 45% 45%;
 
   --radius: 1rem;
 
-  --sidebar: 40 33% 96%;
-  --sidebar-foreground: 210 20% 25%;
-  --sidebar-primary: 150 25% 45%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 25 70% 90%;
+  --sidebar: 40 30% 96%;
+  --sidebar-foreground: 220 18% 18%;
+  --sidebar-primary: 25 45% 45%;
+  --sidebar-primary-foreground: 40 30% 98%;
+  --sidebar-accent: 40 30% 92%;
   --sidebar-accent-foreground: 25 30% 30%;
-  --sidebar-border: 40 10% 88%;
-  --sidebar-ring: 150 25% 45%;
+  --sidebar-border: 40 15% 88%;
+  --sidebar-ring: 25 45% 45%;
 }
 
 .dark {
-  /* Dark Mode - Deep Forest & Night Sky */
-  --background: 210 20% 15%;
-  --foreground: 40 20% 90%;
+  /* OLED black surfaces */
+  --background: 0 0% 0%;
+  --foreground: 210 20% 92%;
 
-  --card: 210 20% 18%;
-  --card-foreground: 40 20% 90%;
+  --card: 220 18% 6%;
+  --card-foreground: 210 20% 92%;
 
-  --popover: 210 20% 18%;
-  --popover-foreground: 40 20% 90%;
+  --popover: 220 18% 7%;
+  --popover-foreground: 210 20% 92%;
 
-  --primary: 150 30% 55%; /* Lighter Sage */
-  --primary-foreground: 0 0% 100%;
+  /* Brand accent: warm sand/earth tone */
+  --primary: 28 32% 62%;
+  --primary-foreground: 0 0% 8%;
+  --primary-hover: 28 30% 56%;
+  --primary-press: 28 28% 50%;
+  --primary-soft: 28 20% 12%;
+  --primary-border: 28 25% 35%;
 
-  --secondary: 25 40% 30%; /* Muted Peach/Rust */
-  --secondary-foreground: 25 60% 90%;
+  /* Secondary: warm neutral dark */
+  --secondary: 220 14% 12%;
+  --secondary-foreground: 210 20% 92%;
 
-  --muted: 210 20% 25%;
-  --muted-foreground: 210 15% 70%;
+  --muted: 220 16% 10%;
+  --muted-foreground: 215 14% 70%;
 
-  --accent: 270 20% 30%;
-  --accent-foreground: 270 40% 90%;
+  --accent: 270 20% 15%;
+  --accent-foreground: 270 30% 85%;
 
-  --destructive: 0 62% 30%;
+  --destructive: 0 62% 40%;
   --destructive-foreground: 0 0% 98%;
 
-  --border: 210 20% 25%;
-  --input: 210 20% 25%;
-  --ring: 150 30% 55%;
+  --border: 220 14% 14%;
+  --input: 220 14% 14%;
+  --ring: 28 32% 62%;
 
-  --sidebar: 210 20% 13%;
-  --sidebar-foreground: 40 20% 90%;
-  --sidebar-primary: 150 30% 55%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-accent: 25 40% 25%;
-  --sidebar-accent-foreground: 25 60% 90%;
-  --sidebar-border: 210 20% 25%;
-  --sidebar-ring: 150 30% 55%;
+  /* Sidebar: OLED black */
+  --sidebar: 0 0% 0%;
+  --sidebar-foreground: 210 20% 92%;
+  --sidebar-primary: 28 32% 62%;
+  --sidebar-primary-foreground: 0 0% 8%;
+  --sidebar-accent: 220 14% 12%;
+  --sidebar-accent-foreground: 210 20% 92%;
+  --sidebar-border: 220 14% 14%;
+  --sidebar-ring: 28 32% 62%;
 }
 
 @layer base {
@@ -152,76 +162,35 @@
   }
 }
 
-/* 🌸 Soft script style for the congratulations message */
+/* Elegant tagline style - readable serif italic */
 .blossom-script {
-  font-family: "Pacifico", "Segoe Script", "Bradley Hand", system-ui, -apple-system,
-    BlinkMacSystemFont, "Segoe UI", cursive;
+  font-family: "Georgia", "Times New Roman", ui-serif, serif;
+  font-style: italic;
+  font-weight: 500;
 }
 
-/* 🌸 Falling blossom petals */
+/* Falling blossom petals */
 .petal {
   position: absolute;
   width: 18px;
   height: 28px;
-  border-radius: 999px 999px 999px 999px;
+  border-radius: 999px;
   background: radial-gradient(circle at 30% 30%, #ffeef7 0%, #ffc4dd 40%, #ff96c8 100%);
   opacity: 0.7;
   filter: blur(0.3px);
   animation: petal-fall 10s linear infinite;
 }
 
-/* Different starting positions & delays so they feel random-ish */
-.petal-1 {
-  left: 10%;
-  animation-delay: 0s;
-}
-
-.petal-2 {
-  left: 30%;
-  animation-delay: 2s;
-  transform: scale(0.9) rotate(-10deg);
-}
-
-.petal-3 {
-  left: 55%;
-  animation-delay: 4s;
-  transform: scale(1.1) rotate(8deg);
-}
-
-.petal-4 {
-  left: 70%;
-  animation-delay: 1s;
-  transform: scale(0.8) rotate(15deg);
-}
-
-.petal-5 {
-  left: 85%;
-  animation-delay: 3s;
-  transform: scale(1.2) rotate(-6deg);
-}
-
-.petal-6 {
-  left: 40%;
-  animation-delay: 5s;
-  transform: scale(0.95) rotate(4deg);
-}
+.petal-1 { left: 10%; animation-delay: 0s; }
+.petal-2 { left: 30%; animation-delay: 2s; transform: scale(0.9) rotate(-10deg); }
+.petal-3 { left: 55%; animation-delay: 4s; transform: scale(1.1) rotate(8deg); }
+.petal-4 { left: 70%; animation-delay: 1s; transform: scale(0.8) rotate(15deg); }
+.petal-5 { left: 85%; animation-delay: 3s; transform: scale(1.2) rotate(-6deg); }
+.petal-6 { left: 40%; animation-delay: 5s; transform: scale(0.95) rotate(4deg); }
 
 @keyframes petal-fall {
-  0% {
-    top: -10%;
-    opacity: 0;
-    transform: translateX(0) rotate(0deg);
-  }
-  10% {
-    opacity: 0.9;
-  }
-  50% {
-    transform: translateX(25px) rotate(25deg);
-  }
-  100% {
-    top: 110%;
-    opacity: 0;
-    transform: translateX(-25px) rotate(60deg);
-  }
+  0% { top: -10%; opacity: 0; transform: translateX(0) rotate(0deg); }
+  10% { opacity: 0.9; }
+  50% { transform: translateX(25px) rotate(25deg); }
+  100% { top: 110%; opacity: 0; transform: translateX(-25px) rotate(60deg); }
 }
-/* 🌸 Button style for pregnancy milestone markers */

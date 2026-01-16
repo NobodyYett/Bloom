@@ -50,3 +50,24 @@ bloom-review.zip
 
 .gradle/
 .android/
+
+# --- local env ---
+.env
+.env.*
+!.env.example
+
+# --- node / builds ---
+node_modules/
+dist/
+.vite/
+*.log
+
+# --- capacitor/ios ---
+ios/App/App.xcodeproj/xcuserdata/
+ios/App/App.xcworkspace/xcuserdata/
+ios/App/Pods/
+
+# --- android build junk ---
+android/.gradle/
+android/app/build/
+android/build/
