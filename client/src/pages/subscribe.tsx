@@ -1,387 +1,372 @@
 // client/src/pages/subscribe.tsx
-//
-// Subscription purchase page
-// Clean UI with single upgrade button
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
-import { usePregnancyState } from "@/hooks/usePregnancyState";
-import { usePremium } from "@/contexts/PremiumContext";
+import { useAuth } from "@/hooks/useAuth";
 import { usePartnerAccess } from "@/contexts/PartnerContext";
+import { usePremium } from "@/contexts/PremiumContext";
+import { useToast } from "@/hooks/use-toast";
+import { Capacitor } from "@capacitor/core";
 import {
   getCurrentOffering,
   purchasePackage,
   restorePurchases,
   type Package,
+  type Offering,
 } from "@/lib/purchases";
 import {
-  Sparkles,
+  Crown,
   Check,
-  Heart,
-  Users,
-  ListTodo,
-  Lightbulb,
   Loader2,
-  ArrowLeft,
+  Smartphone,
+  RefreshCw,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+type PlanType = "monthly" | "annual";
 
 export default function SubscribePage() {
-  const { dueDate, setDueDate } = usePregnancyState();
-  const { isPremium, canPurchase, refreshEntitlement } = usePremium();
-  const { isPartnerView, momName } = usePartnerAccess();
-  const [, setLocation] = useLocation();
+  const { user } = useAuth();
+  const { isPartnerView } = usePartnerAccess();
+  const { isPremium, canPurchase, refreshPremiumStatus } = usePremium();
+  const { toast } = useToast();
+  const [, navigate] = useLocation();
 
-  const [purchasing, setPurchasing] = useState(false);
-  const [restoring, setRestoring] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [offering, setOffering] = useState<Offering | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<PlanType>("annual");
+  const [isPurchasing, setIsPurchasing] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [isLoadingOffering, setIsLoadingOffering] = useState(true);
 
-  // Feature lists
-  const momFeatures = [
-    {
-      icon: <Users className="w-5 h-5" />,
-      title: "Partner View",
-      description: "Your partner gets their own dashboard with pregnancy updates, upcoming appointments, and personalized tips on how to support you each week.",
-    },
-    {
-      icon: <ListTodo className="w-5 h-5" />,
-      title: "Shared To-Do List",
-      description: "Plan together with a shared task list. Assign responsibilities, track progress, and make sure nothing falls through the cracks before baby arrives.",
-    },
-    {
-      icon: <Lightbulb className="w-5 h-5" />,
-      title: "Smart Suggestions",
-      description: "Get personalized task recommendations based on your current week — from scheduling appointments to prepping the nursery, timed perfectly.",
-    },
-    {
-      icon: <Sparkles className="w-5 h-5" />,
-      title: "More Ivy Questions",
-      description: "Ask Ivy up to 5 questions per day. Get personalized guidance on symptoms, what to expect, and how to prepare — whenever you need it.",
-    },
-  ];
-
-  const partnerFeatures = [
-    "See pregnancy updates and milestones",
-    "View upcoming appointments",
-    "Get personalized tips on how to support each week",
-    "Ask Ivy up to 5 questions per day",
-  ];
-
-  // Redirect if already premium
+  // Redirect partner to partner-paywall
   useEffect(() => {
-    if (isPremium) {
-      const timer = setTimeout(() => {
-        setLocation("/");
-      }, 1500);
-      return () => clearTimeout(timer);
+    if (isPartnerView) {
+      navigate("/partner-paywall", { replace: true });
     }
-  }, [isPremium, setLocation]);
+  }, [isPartnerView, navigate]);
 
-  // Handle purchase - fetches offering and purchases in one go
-  async function handlePurchase() {
-    console.log("[Subscribe] handlePurchase called");
-    console.log("[Subscribe] purchasing:", purchasing, "canPurchase:", canPurchase);
-    
-    if (purchasing || !canPurchase) {
-      console.log("[Subscribe] Aborting - already purchasing or cannot purchase");
+  // Load offerings on mount (native only)
+  useEffect(() => {
+    if (!canPurchase) {
+      setIsLoadingOffering(false);
       return;
     }
 
-    setPurchasing(true);
-    setError(null);
-
-    try {
-      // Get current offering
-      console.log("[Subscribe] Fetching current offering...");
-      const offering = await getCurrentOffering();
-      console.log("[Subscribe] Offering received:", offering);
-      
-      if (!offering?.availablePackages?.length) {
-        console.log("[Subscribe] No packages available in offering");
-        setError("Unable to load subscription. Please try again.");
-        setPurchasing(false);
-        return;
+    async function loadOffering() {
+      try {
+        const currentOffering = await getCurrentOffering();
+        setOffering(currentOffering);
+      } catch (err) {
+        console.error("[Subscribe] Failed to load offerings:", err);
+      } finally {
+        setIsLoadingOffering(false);
       }
+    }
 
-      // Get first available package (monthly)
-      const pkg: Package = offering.availablePackages[0];
-      console.log("[Subscribe] Selected package:", pkg);
-      
-      console.log("[Subscribe] Calling purchasePackage...");
-      const result = await purchasePackage(pkg);
-      console.log("[Subscribe] Purchase result:", result);
+    loadOffering();
+  }, [canPurchase]);
+
+  // Get package by type (deterministic selection)
+  function getPackageByType(type: PlanType): Package | null {
+    if (!offering) return null;
+
+    // Prefer named packages from RevenueCat
+    if (type === "monthly" && offering.monthly) {
+      return offering.monthly;
+    }
+    if (type === "annual" && offering.annual) {
+      return offering.annual;
+    }
+
+    // Fallback: search by identifier pattern
+    const searchTerms = type === "monthly" 
+      ? ["monthly", "month", "1m", "_m_"] 
+      : ["annual", "yearly", "year", "12m", "_y_"];
+
+    const pkg = offering.availablePackages.find((p) =>
+      searchTerms.some(
+        (term) =>
+          p.identifier.toLowerCase().includes(term) ||
+          p.product.identifier.toLowerCase().includes(term)
+      )
+    );
+
+    return pkg || null;
+  }
+
+  const monthlyPkg = getPackageByType("monthly");
+  const annualPkg = getPackageByType("annual");
+  const selectedPkg = selectedPlan === "monthly" ? monthlyPkg : annualPkg;
+
+  async function handlePurchase() {
+    if (!selectedPkg || !canPurchase) return;
+
+    setIsPurchasing(true);
+    try {
+      const result = await purchasePackage(selectedPkg);
 
       if (result.success) {
-        console.log("[Subscribe] Purchase successful, refreshing entitlement");
-        await refreshEntitlement();
-      } else if (result.error && result.error !== "cancelled") {
-        console.log("[Subscribe] Purchase failed:", result.error);
-        setError(result.error);
+        toast({
+          title: "Welcome to Bloom Premium!",
+          description: "Your subscription is now active.",
+        });
+        
+        // Refresh from Supabase (webhook will have updated it)
+        // Add small delay for webhook processing
+        setTimeout(async () => {
+          await refreshPremiumStatus();
+          navigate("/", { replace: true });
+        }, 2000);
+      } else if (result.error === "cancelled") {
+        // User cancelled - do nothing
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Purchase failed",
+          description: result.error || "Please try again.",
+        });
       }
     } catch (err) {
       console.error("[Subscribe] Purchase error:", err);
-      setError("Something went wrong. Please try again.");
+      toast({
+        variant: "destructive",
+        title: "Something went wrong",
+        description: "Please try again later.",
+      });
+    } finally {
+      setIsPurchasing(false);
     }
-
-    setPurchasing(false);
   }
 
-  // Handle restore
   async function handleRestore() {
-    console.log("[Subscribe] handleRestore called");
-    if (restoring) return;
+    if (!canPurchase) return;
 
-    setRestoring(true);
-    setError(null);
+    setIsRestoring(true);
+    try {
+      const result = await restorePurchases();
 
-    console.log("[Subscribe] Calling restorePurchases...");
-    const result = await restorePurchases();
-    console.log("[Subscribe] Restore result:", result);
-
-    if (result.success) {
-      await refreshEntitlement();
-      if (!result.customerInfo?.entitlements?.active?.premium) {
-        setError("No previous purchases found");
+      if (result.success) {
+        toast({
+          title: "Purchases restored",
+          description: "Checking your subscription status...",
+        });
+        
+        // Refresh from Supabase
+        setTimeout(async () => {
+          await refreshPremiumStatus();
+        }, 2000);
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Restore failed",
+          description: result.error || "No previous purchases found.",
+        });
       }
-    } else if (result.error) {
-      setError(result.error);
+    } catch (err) {
+      console.error("[Subscribe] Restore error:", err);
+    } finally {
+      setIsRestoring(false);
     }
-
-    setRestoring(false);
   }
 
-  // Success state
+  // Already premium
   if (isPremium) {
     return (
-      <Layout dueDate={dueDate} setDueDate={setDueDate}>
-        <div className="max-w-lg mx-auto py-16 px-4 text-center">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-100 dark:bg-green-900/30 mb-6">
-            <Check className="w-10 h-10 text-green-600 dark:text-green-400" />
+      <Layout>
+        <div className="max-w-md mx-auto py-12 text-center space-y-6">
+          <div className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center">
+            <Crown className="w-8 h-8 text-primary" />
           </div>
-          <h1 className="font-serif text-3xl font-bold mb-3">
-            Welcome to Premium
-          </h1>
-          <p className="text-muted-foreground mb-6">
-            All features are now unlocked. Enjoy your journey together.
+          <h1 className="font-serif text-2xl font-bold">You&apos;re Premium!</h1>
+          <p className="text-muted-foreground">
+            You have full access to all Bloom features.
           </p>
-          <Button onClick={() => setLocation("/")} variant="outline">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Home
+          <Button onClick={() => navigate("/")}>
+            Go Home
           </Button>
         </div>
       </Layout>
     );
   }
 
-  // Partner view
-  if (isPartnerView) {
+  // Web: Show mobile-only message
+  if (!Capacitor.isNativePlatform()) {
     return (
-      <Layout dueDate={dueDate} setDueDate={setDueDate}>
-        <div className="max-w-xl mx-auto py-8 px-4">
-          {/* Header */}
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
-              <Users className="w-8 h-8 text-primary" />
-            </div>
-            <h1 className="font-serif text-3xl font-bold mb-2">Unlock Partner Access</h1>
-            <p className="text-muted-foreground">
-              {momName ? `Subscribe to access ${momName}'s pregnancy journey` : "Subscribe to unlock the partner experience"}
-            </p>
+      <Layout>
+        <div className="max-w-md mx-auto py-12 text-center space-y-6">
+          <div className="w-16 h-16 mx-auto rounded-full bg-muted flex items-center justify-center">
+            <Smartphone className="w-8 h-8 text-muted-foreground" />
           </div>
-
-          {/* Features */}
-          <div className="bg-card border border-border rounded-xl p-6 mb-8">
-            <h3 className="font-medium mb-4">With Premium, you'll be able to:</h3>
-            <div className="space-y-3">
-              {partnerFeatures.map((feature, index) => (
-                <div key={index} className="flex items-center gap-3">
-                  <Check className="w-5 h-5 text-green-500 shrink-0" />
-                  <span className="text-sm">{feature}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Error */}
-          {error && (
-            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3 mb-4">
-              <p className="text-sm text-destructive text-center">{error}</p>
-            </div>
-          )}
-
-          {/* Purchase button */}
-          {canPurchase ? (
-            <Button
-              onClick={handlePurchase}
-              disabled={purchasing}
-              className="w-full h-12 text-base mb-6"
-              size="lg"
-            >
-              {purchasing ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <Heart className="w-4 h-4 mr-2" />
-                  Upgrade to Premium
-                </>
-              )}
-            </Button>
-          ) : (
-            <div className="bg-muted/50 border border-border rounded-xl p-6 text-center mb-6">
-              <p className="text-sm text-muted-foreground">
-                To subscribe, please use the iOS or Android app.
-              </p>
-            </div>
-          )}
-
-          {/* Footer links */}
-          <div className="text-center space-y-4">
-            {canPurchase && (
-              <button
-                onClick={handleRestore}
-                disabled={restoring}
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                {restoring ? "Restoring..." : "Restore Purchases"}
-              </button>
-            )}
-            
-            <div className="flex justify-center gap-4 text-xs text-muted-foreground">
-              <button 
-                type="button"
-                onClick={() => window.open('/privacy.html', '_blank')} 
-                className="underline hover:text-foreground transition-colors"
-              >
-                Privacy Policy
-              </button>
-              <span>•</span>
-              <button 
-                type="button"
-                onClick={() => window.open('/terms.html', '_blank')} 
-                className="underline hover:text-foreground transition-colors"
-              >
-                Terms of Service
-              </button>
-            </div>
-
-            <Button onClick={() => setLocation("/settings")} variant="link" className="text-muted-foreground">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Settings
-            </Button>
-          </div>
+          <h1 className="font-serif text-2xl font-bold">
+            Subscriptions Available in App
+          </h1>
+          <p className="text-muted-foreground">
+            To subscribe to Bloom Premium, please use the iOS or Android app.
+          </p>
+          <Button variant="outline" onClick={() => navigate("/")}>
+            Go Back
+          </Button>
         </div>
       </Layout>
     );
   }
 
-  // Mom view
+  // Loading offerings
+  if (isLoadingOffering) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </Layout>
+    );
+  }
+
+  // Features list
+  const features = [
+    "Partner View for your support person",
+    "Unlimited Ivy AI questions",
+    "Detailed weekly insights",
+    "Smart task suggestions",
+    "Priority support",
+  ];
+
   return (
-    <Layout dueDate={dueDate} setDueDate={setDueDate}>
-      <div className="max-w-xl mx-auto py-8 px-4">
+    <Layout>
+      <div className="max-w-lg mx-auto py-8 px-4 space-y-8">
         {/* Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
-            <Heart className="w-8 h-8 text-primary" />
+        <div className="text-center space-y-2">
+          <div className="w-14 h-14 mx-auto rounded-full bg-primary/10 flex items-center justify-center mb-4">
+            <Crown className="w-7 h-7 text-primary" />
           </div>
-          <h1 className="font-serif text-3xl font-bold mb-2">Bloom Premium</h1>
+          <h1 className="font-serif text-3xl font-bold">Bloom Premium</h1>
           <p className="text-muted-foreground">
-            Share your pregnancy journey with your partner
+            Unlock the full pregnancy experience
           </p>
         </div>
 
         {/* Features */}
-        <div className="bg-card border border-border rounded-xl p-6 mb-8">
-          <div className="space-y-5">
-            {momFeatures.map((feature, index) => (
-              <div key={index} className="flex items-start gap-4">
-                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 text-primary mt-0.5">
-                  {feature.icon}
-                </div>
-                <div className="space-y-1">
-                  <p className="font-semibold">{feature.title}</p>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    {feature.description}
-                  </p>
-                </div>
+        <div className="bg-card border border-border rounded-xl p-6 space-y-3">
+          {features.map((feature, i) => (
+            <div key={i} className="flex items-center gap-3">
+              <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <Check className="w-3 h-3 text-primary" />
               </div>
-            ))}
-          </div>
+              <span className="text-sm">{feature}</span>
+            </div>
+          ))}
         </div>
 
-        {/* Error */}
-        {error && (
-          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3 mb-4">
-            <p className="text-sm text-destructive text-center">{error}</p>
+        {/* Plan Selection */}
+        {(monthlyPkg || annualPkg) && (
+          <div className="space-y-3">
+            {annualPkg && (
+              <button
+                type="button"
+                onClick={() => setSelectedPlan("annual")}
+                className={cn(
+                  "w-full p-4 rounded-xl border-2 text-left transition-all",
+                  selectedPlan === "annual"
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-primary/50"
+                )}
+              >
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="font-semibold">Annual</div>
+                    <div className="text-sm text-muted-foreground">
+                      Best value — save 40%
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-bold">
+                      {annualPkg.product.priceString}
+                    </div>
+                    <div className="text-xs text-muted-foreground">per year</div>
+                  </div>
+                </div>
+              </button>
+            )}
+
+            {monthlyPkg && (
+              <button
+                type="button"
+                onClick={() => setSelectedPlan("monthly")}
+                className={cn(
+                  "w-full p-4 rounded-xl border-2 text-left transition-all",
+                  selectedPlan === "monthly"
+                    ? "border-primary bg-primary/5"
+                    : "border-border hover:border-primary/50"
+                )}
+              >
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="font-semibold">Monthly</div>
+                    <div className="text-sm text-muted-foreground">
+                      Flexible billing
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-bold">
+                      {monthlyPkg.product.priceString}
+                    </div>
+                    <div className="text-xs text-muted-foreground">per month</div>
+                  </div>
+                </div>
+              </button>
+            )}
           </div>
         )}
 
-        {/* Purchase button */}
-        {canPurchase ? (
-          <Button
-            onClick={handlePurchase}
-            disabled={purchasing}
-            className="w-full h-12 text-base mb-6"
-            size="lg"
+        {/* Purchase Button */}
+        <Button
+          className="w-full h-12 text-base"
+          onClick={handlePurchase}
+          disabled={isPurchasing || !selectedPkg}
+        >
+          {isPurchasing ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            <>
+              <Crown className="w-4 h-4 mr-2" />
+              Subscribe Now
+            </>
+          )}
+        </Button>
+
+        {/* Restore */}
+        <div className="text-center">
+          <button
+            type="button"
+            onClick={handleRestore}
+            disabled={isRestoring}
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
           >
-            {purchasing ? (
+            {isRestoring ? (
               <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Processing...
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Restoring...
               </>
             ) : (
               <>
-                <Sparkles className="w-4 h-4 mr-2" />
-                Upgrade to Premium
+                <RefreshCw className="w-3 h-3" />
+                Restore Purchases
               </>
             )}
-          </Button>
-        ) : (
-          <div className="bg-muted/50 border border-border rounded-xl p-6 text-center mb-6">
-            <p className="text-sm text-muted-foreground">
-              Subscriptions are available on the iOS and Android apps.
-            </p>
-          </div>
-        )}
-
-        {/* Footer links */}
-        <div className="text-center space-y-4">
-          {canPurchase && (
-            <button
-              onClick={handleRestore}
-              disabled={restoring}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              {restoring ? "Restoring..." : "Restore Purchases"}
-            </button>
-          )}
-          
-          <div className="flex justify-center gap-4 text-xs text-muted-foreground">
-            <button 
-              type="button"
-              onClick={() => window.open('/privacy.html', '_blank')} 
-              className="underline hover:text-foreground transition-colors"
-            >
-              Privacy Policy
-            </button>
-            <span>•</span>
-            <button 
-              type="button"
-              onClick={() => window.open('/terms.html', '_blank')} 
-              className="underline hover:text-foreground transition-colors"
-            >
-              Terms of Service
-            </button>
-          </div>
-
-          <Button onClick={() => setLocation("/")} variant="link" className="text-muted-foreground">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Home
-          </Button>
+          </button>
         </div>
+
+        {/* Legal */}
+        <p className="text-xs text-center text-muted-foreground">
+          Payment will be charged to your App Store account. Subscription
+          automatically renews unless canceled at least 24 hours before the end
+          of the current period.
+        </p>
       </div>
     </Layout>
   );

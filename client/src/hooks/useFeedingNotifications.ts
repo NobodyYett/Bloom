@@ -53,7 +53,6 @@ export function useFeedingNotifications(options: FeedingNotificationOptions = {}
         icon: "/icon-192.png",
         badge: "/icon-192.png",
         tag: "bloom-feeding",
-        renotify: true,
       });
     } catch (e) {
       console.warn("Browser notification failed:", e);

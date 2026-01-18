@@ -1,133 +1,78 @@
 // client/src/components/premium-lock.tsx
-//
-// Glass preview overlay for premium features
-// Shows blurred/frosted content with subtle CTA
 
 import { ReactNode } from "react";
 import { useLocation } from "wouter";
-import { cn } from "@/lib/utils";
+import { usePartnerAccess } from "@/contexts/PartnerContext";
+import { Crown, Lock } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface PremiumLockProps {
-  children: ReactNode;
   isPaid: boolean;
-  /** Short, calm text - no sales language */
+  children: ReactNode;
   message?: string;
-  /** Additional class for the wrapper */
-  className?: string;
-  /** Show the premium badge */
-  showBadge?: boolean;
-  /** Disable the entire overlay (for sections that should just be hidden) */
-  hideIfFree?: boolean;
+  showLockOverlay?: boolean;
 }
 
 export function PremiumLock({
-  children,
   isPaid,
-  message = "Available with Premium",
-  className,
-  showBadge = true,
-  hideIfFree = false,
+  children,
+  message = "This is a premium feature",
+  showLockOverlay = true,
 }: PremiumLockProps) {
-  const [, setLocation] = useLocation();
+  const [, navigate] = useLocation();
+  const { isPartnerView } = usePartnerAccess();
 
-  // If user is paid, render children normally
+  // If premium, show children
   if (isPaid) {
     return <>{children}</>;
   }
 
-  // If hideIfFree, don't render at all
-  if (hideIfFree) {
-    return null;
+  // Determine where to redirect based on user type
+  // Partners go to partner-paywall (no purchase CTA)
+  // Moms go to subscribe (can purchase)
+  const paywallRoute = isPartnerView ? "/partner-paywall" : "/subscribe";
+
+  // Show locked state
+  if (showLockOverlay) {
+    return (
+      <div className="relative">
+        {/* Blurred/disabled content */}
+        <div className="opacity-50 pointer-events-none select-none blur-[2px]">
+          {children}
+        </div>
+
+        {/* Lock overlay */}
+        <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-xl">
+          <div className="text-center space-y-3 p-6">
+            <div className="w-12 h-12 mx-auto rounded-full bg-muted flex items-center justify-center">
+              <Lock className="w-6 h-6 text-muted-foreground" />
+            </div>
+            <p className="text-sm font-medium">{message}</p>
+            <Button
+              size="sm"
+              onClick={() => navigate(paywallRoute)}
+            >
+              <Crown className="w-4 h-4 mr-2" />
+              {isPartnerView ? "Learn More" : "Upgrade"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
-  function handleUnlock() {
-    setLocation("/subscribe");
-  }
-
-  return (
-    <div className={cn("relative", className)}>
-      {/* Content - slightly dimmed but readable */}
-      <div
-        className="select-none pointer-events-none opacity-50"
-        aria-hidden="true"
-      >
-        {children}
-      </div>
-
-      {/* Clear overlay with pill badge */}
-      <div
-        className={cn(
-          "absolute inset-0 z-10",
-          "flex items-center justify-center",
-          "cursor-pointer",
-          "rounded-xl",
-          "border border-dashed border-primary/30",
-          "hover:border-primary/50 hover:bg-primary/5",
-          "transition-all duration-200"
-        )}
-        onClick={handleUnlock}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            handleUnlock();
-          }
-        }}
-        aria-label={message}
-      >
-        {showBadge && (
-          <span className="px-4 py-2 rounded-full bg-primary text-primary-foreground text-sm font-medium shadow-sm">
-            Available with Premium
-          </span>
-        )}
-      </div>
-    </div>
-  );
+  // Simple hidden version
+  return null;
 }
 
-/**
- * Inline premium lock for smaller elements (e.g., single buttons, small sections)
- */
-export function PremiumLockInline({
-  children,
-  isPaid,
-  message = "Premium",
-  className,
-}: {
-  children: ReactNode;
-  isPaid: boolean;
-  message?: string;
-  className?: string;
-}) {
-  const [, setLocation] = useLocation();
+// Hook for programmatic checks and redirects
+export function usePremiumGate() {
+  const [, navigate] = useLocation();
+  const { isPartnerView } = usePartnerAccess();
 
-  if (isPaid) {
-    return <>{children}</>;
-  }
+  const redirectToPaywall = () => {
+    navigate(isPartnerView ? "/partner-paywall" : "/subscribe");
+  };
 
-  return (
-    <div
-      className={cn(
-        "relative inline-flex items-center gap-2 cursor-pointer group",
-        className
-      )}
-      onClick={() => setLocation("/subscribe")}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          setLocation("/subscribe");
-        }
-      }}
-    >
-      <div className="blur-[2px] opacity-50 pointer-events-none select-none">
-        {children}
-      </div>
-      <span className="absolute inset-0 flex items-center justify-center">
-        <span className="text-xs font-medium text-primary/80 bg-primary/10 px-2 py-0.5 rounded-full">
-          {message}
-        </span>
-      </span>
-    </div>
-  );
+  return { redirectToPaywall, paywallRoute: isPartnerView ? "/partner-paywall" : "/subscribe" };
 }

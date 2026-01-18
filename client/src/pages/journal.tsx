@@ -545,7 +545,7 @@ function EntryForm({ entry, onSave, onCancel, isSaving, currentWeek }: EntryForm
 
   const handleSubmit = async () => {
     if (!body.trim()) return;
-    await onSave({ entry_date: date, title: title.trim() || undefined, body: body.trim(), mood: mood || undefined, symptoms, image_path: removeImage ? undefined : entry?.image_path }, imageFile || undefined);
+    await onSave({ entry_date: date, title: title.trim() || undefined, body: body.trim(), mood: mood || undefined, symptoms, image_path: removeImage ? undefined : (entry?.image_path ?? undefined) }, imageFile || undefined);
   };
 
   const showImage = imagePreview || (!removeImage && existingImageUrl);

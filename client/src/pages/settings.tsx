@@ -51,7 +51,7 @@ export default function SettingsPage() {
 
   const [nameInput, setNameInput] = useState("");
   const [dateInput, setDateInput] = useState("");
-  const [sexInput, setSexInput] = useState<"boy" | "girl" | null>(null);
+  const [sexInput, setSexInput] = useState<"boy" | "girl" | "unknown">("unknown");
   const [momInput, setMomInput] = useState("");
   const [partnerInput, setPartnerInput] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -72,7 +72,7 @@ export default function SettingsPage() {
   useEffect(() => {
     setNameInput(babyName ?? "");
     setDateInput(dueDate ? format(dueDate, "yyyy-MM-dd") : "");
-    setSexInput(babySex && babySex !== "unknown" ? (babySex as "boy" | "girl") : null);
+    setSexInput(babySex || "unknown");
     setMomInput(profileMomName ?? "");
     setPartnerInput(partnerName ?? "");
   }, [babyName, dueDate, babySex, profileMomName, partnerName]);
@@ -92,7 +92,7 @@ export default function SettingsPage() {
   async function handleSaveChanges() {
     if (!user || isPartnerView) return;
     setIsSaving(true);
-    const sexToSave: BabySex = sexInput ?? "unknown";
+    const sexToSave: BabySex = sexInput;
     const parsedDueDate = parseLocalDate(dateInput);
 
     if (parsedDueDate) {
@@ -254,7 +254,7 @@ export default function SettingsPage() {
         {/* Partner Access - Extracted Component */}
         {!isPartnerView && <PartnerAccessSection isPaid={isPaid} />}
 
-        {/* Pregnancy Details - only for mom */}
+        {/* Pregnancy Details - only for mom (now includes parent names) */}
         {!isPartnerView && (
           <section className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
             <div className="bg-muted/30 px-6 py-4 border-b border-border">
@@ -272,13 +272,20 @@ export default function SettingsPage() {
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Baby&apos;s Sex</label>
-                <div className="flex gap-4">
+                <div className="flex gap-3">
                   <label className={cn(
                     "flex-1 flex items-center justify-center gap-2 cursor-pointer border rounded-md px-4 py-3 transition-all",
                     sexInput === "boy" ? "bg-blue-50 border-blue-200 text-blue-700 ring-1 ring-blue-200 dark:bg-blue-950 dark:border-blue-800 dark:text-blue-300" : "hover:bg-muted"
                   )}>
                     <input type="radio" name="sex" checked={sexInput === "boy"} onChange={() => setSexInput("boy")} className="sr-only" />
                     <span>Boy</span>
+                  </label>
+                  <label className={cn(
+                    "flex-1 flex items-center justify-center gap-2 cursor-pointer border rounded-md px-4 py-3 transition-all",
+                    sexInput === "unknown" ? "bg-muted border-border text-foreground ring-1 ring-border" : "hover:bg-muted"
+                  )}>
+                    <input type="radio" name="sex" checked={sexInput === "unknown"} onChange={() => setSexInput("unknown")} className="sr-only" />
+                    <span>Unknown</span>
                   </label>
                   <label className={cn(
                     "flex-1 flex items-center justify-center gap-2 cursor-pointer border rounded-md px-4 py-3 transition-all",
@@ -289,6 +296,24 @@ export default function SettingsPage() {
                   </label>
                 </div>
               </div>
+              
+              {/* Parent Names - merged from separate section */}
+              <div className="border-t border-border pt-6 space-y-4">
+                <p className="text-xs text-muted-foreground">Optional. Displayed on your home screen.</p>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Mom&apos;s Name</label>
+                  <Input value={momInput} onChange={(e) => setMomInput(e.target.value)} placeholder="e.g. Sarah" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Partner&apos;s Name</label>
+                  <Input value={partnerInput} onChange={(e) => setPartnerInput(e.target.value)} placeholder="e.g. Alex" />
+                </div>
+              </div>
+            </div>
+            <div className="bg-muted/30 px-6 py-4 border-t border-border flex justify-end">
+              <Button onClick={handleSaveChanges} disabled={isSaving}>
+                {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : <><Save className="mr-2 h-4 w-4" />Save Changes</>}
+              </Button>
             </div>
           </section>
         )}
@@ -374,31 +399,6 @@ export default function SettingsPage() {
                   </Button>
                 </div>
               )}
-            </div>
-          </section>
-        )}
-
-        {/* Parent Names - only for mom */}
-        {!isPartnerView && (
-          <section className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-            <div className="bg-muted/30 px-6 py-4 border-b border-border">
-              <h2 className="text-lg font-semibold">Parents</h2>
-              <p className="text-sm text-muted-foreground">Optional. Displayed on your home screen.</p>
-            </div>
-            <div className="p-6 grid gap-6">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Mom&apos;s Name</label>
-                <Input value={momInput} onChange={(e) => setMomInput(e.target.value)} placeholder="e.g. Sarah" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Partner&apos;s Name</label>
-                <Input value={partnerInput} onChange={(e) => setPartnerInput(e.target.value)} placeholder="e.g. Alex" />
-              </div>
-            </div>
-            <div className="bg-muted/30 px-6 py-4 border-t border-border flex justify-end">
-              <Button onClick={handleSaveChanges} disabled={isSaving}>
-                {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : <><Save className="mr-2 h-4 w-4" />Save Changes</>}
-              </Button>
             </div>
           </section>
         )}

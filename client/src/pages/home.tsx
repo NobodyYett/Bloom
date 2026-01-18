@@ -108,7 +108,6 @@ export default function Home() {
       slot: mostRecent?.slot as string | undefined,
       mood: mostRecent?.mood as "happy" | "neutral" | "sad" | null,
       symptoms,
-      notes: mostRecent?.notes ? String(mostRecent.notes) : undefined,
     };
   }, [todayLogs, isPartnerView]);
 

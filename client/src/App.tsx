@@ -23,13 +23,18 @@ import Settings from "@/pages/settings";
 import AiPage from "@/pages/ai";
 import JoinPage from "@/pages/join";
 import SubscribePage from "@/pages/subscribe";
+import PartnerPaywall from "@/pages/partner-paywall";
 import BabyArrived from "@/pages/baby-arrived";
 
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { PartnerProvider, usePartnerAccess } from "@/contexts/PartnerContext";
-import { PremiumProvider, usePremium } from "@/contexts/PremiumContext";
+import { PremiumProvider } from "@/contexts/PremiumContext";
+import { ThemeProvider } from "@/contexts/ThemeContext";
 import { usePregnancyState } from "@/hooks/usePregnancyState";
 import { supabase } from "./lib/supabase";
+
+// Import theme overrides for gender-based themes
+import "@/themes/theme-overrides.css";
 
 async function closeSafariBestEffort() {
   try {
@@ -181,15 +186,12 @@ function RequireAuth({ children }: { children: JSX.Element }) {
   const { isPartnerView, isLoading: partnerLoading, momIsPremium } = usePartnerAccess();
   const { isProfileLoading, isOnboardingComplete } = usePregnancyState();
   const [location, navigate] = useLocation();
-  
-  // Import premium context to check if partner themselves has premium
-  const { isPremium: currentUserIsPremium } = usePremium();
 
   // Check if we're on the /join page - special handling needed
   const isJoinPage = location.startsWith("/join") || window.location.pathname.startsWith("/join");
   
-  // Check if we're on the /subscribe page - allow partners to see it
-  const isSubscribePage = location.startsWith("/subscribe") || window.location.pathname.startsWith("/subscribe");
+  // Check if we're on the /partner-paywall page - always allow partners
+  const isPartnerPaywallPage = location.startsWith("/partner-paywall") || window.location.pathname.startsWith("/partner-paywall");
   
   // Check if we're on the /settings page - allow partners to sign out
   const isSettingsPage = location.startsWith("/settings") || window.location.pathname.startsWith("/settings");
@@ -202,13 +204,14 @@ function RequireAuth({ children }: { children: JSX.Element }) {
     // Users on /join page are about to become partners - don't create profile
     if (isPartnerView || isJoinPage) return;
 
+    const userId = user.id; // Capture for closure
     let cancelled = false;
 
     async function ensureProfileExists() {
       const { data: existing, error: selectError } = await supabase
         .from("pregnancy_profiles")
         .select("user_id")
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .maybeSingle();
 
       if (cancelled) return;
@@ -221,7 +224,7 @@ function RequireAuth({ children }: { children: JSX.Element }) {
       if (!existing) {
         const { error: upsertError } = await supabase
           .from("pregnancy_profiles")
-          .upsert({ user_id: user.id }, { onConflict: "user_id" });
+          .upsert({ user_id: userId }, { onConflict: "user_id" });
 
         if (cancelled) return;
 
@@ -251,12 +254,15 @@ function RequireAuth({ children }: { children: JSX.Element }) {
       return;
     }
 
-    // Partners skip onboarding and profile checks
-    // Allow access if mom has premium OR if partner purchased premium themselves
+    // Partners: access is ONLY based on mom's premium status
+    // Partner subscribing themselves does NOT unlock partner access
     if (isPartnerView) {
-      const hasAccess = momIsPremium || currentUserIsPremium;
-      if (!hasAccess && !isSubscribePage && !isSettingsPage) {
-        navigate("/subscribe", { replace: true });
+      // Allow settings and partner-paywall pages regardless of premium
+      if (isSettingsPage || isPartnerPaywallPage) return;
+      
+      // Partner access requires MOM to be premium (not partner)
+      if (!momIsPremium) {
+        navigate("/partner-paywall", { replace: true });
       }
       return;
     }
@@ -275,7 +281,7 @@ function RequireAuth({ children }: { children: JSX.Element }) {
     if (isOnboardingComplete && window.location.pathname === "/onboarding") {
       navigate("/", { replace: true });
     }
-  }, [authLoading, partnerLoading, user, isPartnerView, isJoinPage, isProfileLoading, isOnboardingComplete, navigate, location]);
+  }, [authLoading, partnerLoading, user, isPartnerView, momIsPremium, isJoinPage, isSettingsPage, isPartnerPaywallPage, isProfileLoading, isOnboardingComplete, navigate, location]);
 
   // For /join page, only need auth loading check
   if (isJoinPage) {
@@ -373,6 +379,14 @@ function Router() {
         )}
       </Route>
 
+      <Route path="/partner-paywall">
+        {() => (
+          <RequireAuth>
+            <PartnerPaywall />
+          </RequireAuth>
+        )}
+      </Route>
+
       <Route path="/baby-arrived">
         {() => (
           <RequireAuth>
@@ -399,17 +413,19 @@ function Router() {
 export default function App() {
   return (
     <AuthProvider>
-      <PartnerProvider>
-        <PremiumProvider>
-          <QueryClientProvider client={queryClient}>
-            <TooltipProvider>
-              <DeepLinkListener />
-              <Toaster />
-              <Router />
-            </TooltipProvider>
-          </QueryClientProvider>
-        </PremiumProvider>
-      </PartnerProvider>
+      <ThemeProvider>
+        <PartnerProvider>
+          <PremiumProvider>
+            <QueryClientProvider client={queryClient}>
+              <TooltipProvider>
+                <DeepLinkListener />
+                <Toaster />
+                <Router />
+              </TooltipProvider>
+            </QueryClientProvider>
+          </PremiumProvider>
+        </PartnerProvider>
+      </ThemeProvider>
     </AuthProvider>
   );
 }

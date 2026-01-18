@@ -64,6 +64,7 @@ interface PregnancyState {
   setBabySex: (sex: BabySex) => Promise<void>;
   setMomName: (name: string | null) => Promise<void>;
   setPartnerName: (name: string | null) => Promise<void>;
+  setIsOnboardingComplete: (complete: boolean) => Promise<void>;
   
   // Mode transitions
   transitionToInfancy: (birthDate: Date) => Promise<void>;
@@ -288,6 +289,15 @@ export function usePregnancyState(): PregnancyState {
     if (error) throw error;
   }, [user]);
 
+  const setIsOnboardingComplete = useCallback(async (complete: boolean) => {
+    if (!user) return;
+    const { error } = await supabase
+      .from("pregnancy_profiles")
+      .update({ onboarding_complete: complete })
+      .eq("user_id", user.id);
+    if (error) throw error;
+  }, [user]);
+
   return {
     isProfileLoading: isLoading,
     isOnboardingComplete: profile?.onboarding_complete ?? false,
@@ -316,6 +326,7 @@ export function usePregnancyState(): PregnancyState {
     setBabySex,
     setMomName,
     setPartnerName,
+    setIsOnboardingComplete,
     
     transitionToInfancy,
     setInfancyOnboardingComplete,

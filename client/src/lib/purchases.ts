@@ -302,7 +302,7 @@ export async function getCurrentOffering(): Promise<Offering | null> {
 
   try {
     console.log("[Purchases] getCurrentOffering - calling SDK.getOfferings...");
-    const { offerings } = await SDK.getOfferings();
+    const offerings = await SDK.getOfferings() as any;
     console.log("[Purchases] getCurrentOffering - raw offerings:", JSON.stringify(offerings));
     console.log("[Purchases] getCurrentOffering - current offering:", offerings?.current);
     return offerings?.current as Offering | null;
@@ -412,14 +412,16 @@ export async function addCustomerInfoListener(
   if (!SDK) return null;
 
   try {
-    const listener = await SDK.addCustomerInfoUpdateListener((info) => {
+    // The listener callback receives { customerInfo: CustomerInfo }
+    // The returned handle has a remove() method
+    const handle = await SDK.addCustomerInfoUpdateListener((info: any) => {
       console.log("[Purchases] Customer info update received");
       callback(info.customerInfo as CustomerInfo);
     });
     
     // Return cleanup function
     return () => {
-      listener?.remove?.();
+      (handle as any)?.remove?.();
     };
   } catch (error) {
     console.error("[Purchases] Failed to add listener:", error);

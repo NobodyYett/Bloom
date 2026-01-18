@@ -172,7 +172,7 @@ async function fetchJournalStats(userId: string): Promise<{
 
   let streak = 0;
   if (recentEntries && recentEntries.length > 0) {
-    const uniqueDates = [...new Set(recentEntries.map(e => e.entry_date))].sort().reverse();
+    const uniqueDates = Array.from(new Set(recentEntries.map(e => e.entry_date))).sort().reverse();
     const today = new Date().toISOString().split("T")[0];
     const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0];
     

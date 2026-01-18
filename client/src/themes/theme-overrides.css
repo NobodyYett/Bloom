@@ -1,0 +1,336 @@
+/* ===========================================
+   GENDER THEME OVERRIDES
+   Applied via .theme-girl or .theme-boy on <html>
+   Base neutral theme remains when no class applied
+   =========================================== */
+
+/* ==========================================
+   GIRL THEME - Soft Pink/Rose
+   ========================================== */
+
+:root.theme-girl,
+html.theme-girl {
+  /* Primary accent colors - soft rose */
+  --primary: 352 52% 72% !important;
+  --primary-foreground: 351 45% 20% !important;
+  --primary-hover: 351 50% 65%;
+  --primary-press: 351 48% 58%;
+  --primary-soft: 351 60% 94%;
+  --primary-border: 351 45% 85%;
+  --ring: 352 52% 72% !important;
+  
+  /* Sidebar */
+  --sidebar-primary: 352 52% 72% !important;
+  --sidebar-primary-foreground: 351 45% 20%;
+  --sidebar-accent: 351 50% 94%;
+  --sidebar-accent-foreground: 351 40% 25%;
+  --sidebar-ring: 352 52% 72%;
+  
+  /* Secondary gets a pink tint */
+  --secondary: 351 55% 92% !important;
+  --secondary-foreground: 351 40% 20%;
+  
+  /* Cards and borders with pink tint */
+  --border: 351 30% 88%;
+  --card: 351 40% 99%;
+  --background: 351 45% 97%;
+  --muted: 351 35% 94%;
+}
+
+/* Dark mode girl theme */
+.dark.theme-girl,
+:root.dark.theme-girl {
+  --primary: 352 45% 60%;
+  --primary-foreground: 0 0% 8%;
+  --ring: 352 45% 60%;
+  
+  --sidebar-primary: 352 45% 60%;
+  --sidebar-accent: 351 35% 15%;
+  --sidebar-ring: 352 45% 60%;
+  
+  --secondary: 351 30% 12%;
+  --border: 351 25% 20%;
+  --card: 351 20% 6%;
+  --background: 351 20% 4%;
+  --muted: 351 25% 10%;
+}
+
+/* Girl theme - body background gradient */
+.theme-girl body {
+  background: linear-gradient(
+    180deg,
+    hsl(351 65% 94%) 0%,
+    hsl(351 45% 97%) 50%,
+    hsl(40 30% 97%) 100%
+  );
+  min-height: 100vh;
+}
+
+.dark.theme-girl body {
+  background: linear-gradient(
+    180deg,
+    hsl(351 30% 6%) 0%,
+    hsl(351 20% 4%) 50%,
+    hsl(0 0% 0%) 100%
+  );
+}
+
+/* Girl theme - hero gradient overlay */
+.theme-girl .hero-gradient-overlay {
+  background: linear-gradient(
+    160deg,
+    hsla(340, 70%, 85%, 0.95) 0%,
+    hsla(351, 65%, 88%, 0.92) 30%,
+    hsla(351, 55%, 92%, 0.88) 60%,
+    hsla(351, 45%, 95%, 0.85) 100%
+  ) !important;
+}
+
+.dark.theme-girl .hero-gradient-overlay {
+  background: linear-gradient(
+    160deg,
+    hsla(351, 40%, 15%, 0.95) 0%,
+    hsla(351, 35%, 12%, 0.9) 50%,
+    hsla(351, 30%, 8%, 0.85) 100%
+  );
+}
+
+/* Girl sparkles */
+.theme-girl .hero-sparkle {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 0 8px 3px rgba(255, 255, 255, 0.9);
+  animation: sparkle-twinkle 2s ease-in-out infinite;
+}
+
+.theme-girl .hero-sparkle:nth-child(1) { top: 12%; left: 15%; animation-delay: 0s; }
+.theme-girl .hero-sparkle:nth-child(2) { top: 20%; right: 20%; animation-delay: 0.4s; }
+.theme-girl .hero-sparkle:nth-child(3) { top: 8%; right: 12%; animation-delay: 0.8s; }
+.theme-girl .hero-sparkle:nth-child(4) { top: 28%; left: 25%; animation-delay: 1.2s; }
+.theme-girl .hero-sparkle:nth-child(5) { top: 15%; left: 40%; animation-delay: 1.6s; }
+
+@keyframes sparkle-twinkle {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+/* Girl clouds */
+.theme-girl .hero-cloud {
+  position: absolute;
+  background: radial-gradient(ellipse, rgba(255,255,255,0.7) 0%, transparent 70%);
+  border-radius: 50%;
+  filter: blur(12px);
+}
+
+.theme-girl .hero-cloud:nth-child(1) { top: 5%; left: 5%; width: 140px; height: 50px; }
+.theme-girl .hero-cloud:nth-child(2) { top: 15%; right: 8%; width: 180px; height: 60px; opacity: 0.6; }
+.theme-girl .hero-cloud:nth-child(3) { top: 25%; left: 20%; width: 100px; height: 35px; opacity: 0.5; }
+
+/* Girl petal animation colors */
+.theme-girl .petal {
+  background: radial-gradient(circle at 30% 30%, #ffeef7 0%, #ffc4dd 40%, #ff96c8 100%);
+}
+
+
+/* ==========================================
+   BOY THEME - Soft Powder Blue
+   ========================================== */
+
+:root.theme-boy,
+html.theme-boy {
+  /* Primary accent colors - soft blue */
+  --primary: 207 55% 65% !important;
+  --primary-foreground: 207 50% 18% !important;
+  --primary-hover: 207 50% 55%;
+  --primary-press: 207 45% 48%;
+  --primary-soft: 207 70% 94%;
+  --primary-border: 207 50% 82%;
+  --ring: 207 55% 65% !important;
+  
+  /* Sidebar */
+  --sidebar-primary: 207 55% 65% !important;
+  --sidebar-primary-foreground: 207 50% 18%;
+  --sidebar-accent: 207 55% 94%;
+  --sidebar-accent-foreground: 207 45% 22%;
+  --sidebar-ring: 207 55% 65%;
+  
+  /* Secondary gets a blue tint */
+  --secondary: 207 60% 93% !important;
+  --secondary-foreground: 207 45% 18%;
+  
+  /* Cards and borders with blue tint */
+  --border: 207 35% 88%;
+  --card: 207 50% 99%;
+  --background: 207 55% 97%;
+  --muted: 207 40% 94%;
+}
+
+/* Dark mode boy theme */
+.dark.theme-boy,
+:root.dark.theme-boy {
+  --primary: 207 50% 55%;
+  --primary-foreground: 0 0% 8%;
+  --ring: 207 50% 55%;
+  
+  --sidebar-primary: 207 50% 55%;
+  --sidebar-accent: 207 40% 15%;
+  --sidebar-ring: 207 50% 55%;
+  
+  --secondary: 207 35% 12%;
+  --border: 207 25% 20%;
+  --card: 207 20% 6%;
+  --background: 207 20% 4%;
+  --muted: 207 25% 10%;
+}
+
+/* Boy theme - body background gradient */
+.theme-boy body {
+  background: linear-gradient(
+    180deg,
+    hsl(207 70% 94%) 0%,
+    hsl(207 50% 97%) 50%,
+    hsl(40 30% 97%) 100%
+  );
+  min-height: 100vh;
+}
+
+.dark.theme-boy body {
+  background: linear-gradient(
+    180deg,
+    hsl(207 35% 8%) 0%,
+    hsl(207 25% 5%) 50%,
+    hsl(0 0% 0%) 100%
+  );
+}
+
+/* Boy theme - hero gradient overlay */
+.theme-boy .hero-gradient-overlay {
+  background: linear-gradient(
+    160deg,
+    hsla(207, 65%, 82%, 0.95) 0%,
+    hsla(207, 55%, 88%, 0.9) 30%,
+    hsla(207, 45%, 93%, 0.85) 60%,
+    hsla(207, 35%, 96%, 0.8) 100%
+  );
+}
+
+.dark.theme-boy .hero-gradient-overlay {
+  background: linear-gradient(
+    160deg,
+    hsla(207, 40%, 15%, 0.95) 0%,
+    hsla(207, 35%, 12%, 0.9) 50%,
+    hsla(207, 30%, 8%, 0.85) 100%
+  );
+}
+
+/* Boy clouds - more prominent */
+.theme-boy .hero-cloud {
+  position: absolute;
+  background: radial-gradient(ellipse, rgba(255,255,255,0.75) 0%, transparent 70%);
+  border-radius: 50%;
+  filter: blur(15px);
+  animation: cloud-float 20s ease-in-out infinite;
+}
+
+.theme-boy .hero-cloud:nth-child(1) { 
+  top: 5%; 
+  left: 3%; 
+  width: 180px; 
+  height: 60px; 
+  animation-delay: 0s;
+}
+
+.theme-boy .hero-cloud:nth-child(2) { 
+  top: 12%; 
+  right: 5%; 
+  width: 220px; 
+  height: 70px; 
+  opacity: 0.7;
+  animation-delay: -5s;
+}
+
+.theme-boy .hero-cloud:nth-child(3) { 
+  top: 22%; 
+  left: 15%; 
+  width: 120px; 
+  height: 40px; 
+  opacity: 0.6;
+  animation-delay: -10s;
+}
+
+.theme-boy .hero-cloud:nth-child(4) { 
+  top: 8%; 
+  left: 35%; 
+  width: 150px; 
+  height: 50px; 
+  opacity: 0.5;
+  animation-delay: -15s;
+}
+
+@keyframes cloud-float {
+  0%, 100% { transform: translateX(0) translateY(0); }
+  25% { transform: translateX(10px) translateY(-5px); }
+  50% { transform: translateX(20px) translateY(0); }
+  75% { transform: translateX(10px) translateY(5px); }
+}
+
+/* Boy sparkles - subtle */
+.theme-boy .hero-sparkle {
+  display: none; /* Boys theme uses clouds instead */
+}
+
+/* Boy petal/particle colors */
+.theme-boy .petal {
+  background: radial-gradient(circle at 30% 30%, #e6f4ff 0%, #a6d4f7 40%, #6bb8ed 100%);
+}
+
+
+/* ==========================================
+   UTILITY CLASSES
+   ========================================== */
+
+/* Hide neutral overlay when themed */
+.theme-girl .hero-neutral-overlay,
+.theme-boy .hero-neutral-overlay {
+  display: none;
+}
+
+/* Base hero gradient - transparent by default */
+.hero-gradient-overlay {
+  background: transparent;
+}
+
+/* Hide decorations when no theme */
+.hero-sparkle,
+.hero-cloud {
+  display: none;
+}
+
+.theme-girl .hero-sparkle,
+.theme-girl .hero-cloud,
+.theme-boy .hero-cloud {
+  display: block;
+}
+
+/* Wave decoration at bottom of hero */
+.hero-wave {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  pointer-events: none;
+}
+
+.theme-girl .hero-wave {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 40'%3E%3Cpath fill='%23fff5f7' d='M0,20 Q150,0 300,20 T600,20 T900,20 T1200,20 V40 H0 Z'/%3E%3C/svg%3E") repeat-x;
+  background-size: 600px 40px;
+}
+
+.theme-boy .hero-wave {
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 40'%3E%3Cpath fill='%23f5faff' d='M0,20 Q150,0 300,20 T600,20 T900,20 T1200,20 V40 H0 Z'/%3E%3C/svg%3E") repeat-x;
+  background-size: 600px 40px;
+}
