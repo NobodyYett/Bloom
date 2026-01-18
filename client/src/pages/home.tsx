@@ -11,11 +11,12 @@ import { WeeklyWisdom } from "@/components/weekly-wisdom";
 import { Registries } from "@/components/registries";
 import { SharedTasksCard } from "@/components/shared-tasks-card";
 import { useTodayLogs } from "@/hooks/usePregnancyLogs";
+import { useRecentJournalEntries } from "@/hooks/useJournalEntries";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
 import { usePartnerAccess } from "@/contexts/PartnerContext";
 import { usePremium } from "@/contexts/PremiumContext";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import generatedBg from "@/asset/soft_pastel_gradient_background_with_organic_shapes.png";
 import { FeedingTracker } from "@/components/feeding-tracker";
 import { useFeedingNotifications } from "@/hooks/useFeedingNotifications";
+import { BookOpen, ChevronRight } from "lucide-react";
 
 type NextAppt = {
   id: string;
@@ -51,6 +53,10 @@ export default function Home() {
 
   const { user } = useAuth();
   const { isPartnerView, momName: partnerMomName, momUserId } = usePartnerAccess();
+  const [, navigate] = useLocation();
+  
+  // Recent journal entries for preview (mom-only)
+  const { data: recentJournalEntries = [] } = useRecentJournalEntries(2);
   
   const [nextAppt, setNextAppt] = useState<NextAppt | null>(null);
   const [editingName, setEditingName] = useState(false);
@@ -195,11 +201,33 @@ export default function Home() {
       <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
         {/* Hero Section */}
         <section className="relative rounded-3xl overflow-hidden p-10 md:p-14 text-white">
+          {/* Base background image */}
           <div
             className="absolute inset-0 bg-cover bg-center z-0"
             style={{ backgroundImage: `url(${generatedBg})` }}
           />
-          <div className="absolute inset-0 bg-black/10 z-10" />
+          
+          {/* Theme gradient overlay - changes based on baby_sex */}
+          <div className="hero-gradient-overlay absolute inset-0" style={{ zIndex: 5 }} />
+          
+          {/* Decorative clouds */}
+          <div className="hero-cloud" />
+          <div className="hero-cloud" />
+          <div className="hero-cloud" />
+          <div className="hero-cloud" />
+          
+          {/* Decorative sparkles (girl theme) */}
+          <div className="hero-sparkle" />
+          <div className="hero-sparkle" />
+          <div className="hero-sparkle" />
+          <div className="hero-sparkle" />
+          <div className="hero-sparkle" />
+          
+          {/* Wave decoration at bottom */}
+          <div className="hero-wave" />
+          
+          {/* Dark overlay for text readability (hidden when themed) */}
+          <div className="hero-neutral-overlay absolute inset-0 bg-black/10 z-10" />
 
           <div className="relative z-20 max-w-3xl">
             {(dueDate && currentWeek > 0) || appMode === "infancy" ? (
@@ -288,7 +316,7 @@ export default function Home() {
             <BabySizeDisplay currentWeek={effectiveWeek} appMode={appMode} />
 
             {/* Progress (pregnancy) OR Age (infancy) */}
-            <div className="bg-card rounded-xl p-6 border border-border shadow-sm space-y-4">
+            <div className="bg-card rounded-xl p-6 border border-border/60 space-y-4">
               {appMode === "infancy" ? (
                 /* INFANCY: Age display */
                 <div className="space-y-3">
@@ -356,8 +384,8 @@ export default function Home() {
                   className={cn(
                     "rounded-xl px-4 py-4 cursor-pointer transition",
                     nextAppt
-                      ? "bg-primary/10 border border-primary/20 hover:bg-primary/20"
-                      : "bg-muted/40 border border-border hover:bg-muted"
+                      ? "bg-primary/10 border border-primary/30 hover:bg-primary/15"
+                      : "bg-muted/50 border border-border/60 hover:bg-muted"
                   )}
                 >
                   {nextAppt ? (
@@ -411,7 +439,7 @@ export default function Home() {
           )}>
             {/* Daily Check-in - only for mom */}
             {!isPartnerView && (
-              <DailyCheckIn currentWeek={effectiveWeek} />
+              <DailyCheckIn currentWeek={effectiveWeek} appMode={appMode} />
             )}
             
             {/* "How She's Doing" card for partners */}
@@ -471,6 +499,50 @@ export default function Home() {
             />
           );
         })()}
+
+        {/* Recent Journal Entries - mom only */}
+        {!isPartnerView && recentJournalEntries.length > 0 && (
+          <section className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-border/60 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
+                  <BookOpen className="w-4 h-4 text-primary" />
+                </div>
+                <div>
+                  <h2 className="font-medium text-sm text-foreground">Recent Journal</h2>
+                  <p className="text-xs text-muted-foreground">Your latest entries</p>
+                </div>
+              </div>
+              <Link href="/journal">
+                <span className="text-xs text-primary hover:text-primary/80 transition-colors cursor-pointer flex items-center gap-1">
+                  View all
+                  <ChevronRight className="w-3 h-3" />
+                </span>
+              </Link>
+            </div>
+            <div className="divide-y divide-border/60">
+              {recentJournalEntries.map((entry) => (
+                <div
+                  key={entry.id}
+                  onClick={() => navigate(`/journal?entry=${entry.id}`)}
+                  className="px-5 py-3 cursor-pointer hover:bg-muted/30 transition-colors"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium text-foreground">
+                      {entry.title || format(new Date(entry.entry_date + "T00:00:00"), "EEEE, MMM d")}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {format(new Date(entry.created_at), "h:mm a")}
+                    </span>
+                  </div>
+                  <p className="text-sm text-muted-foreground line-clamp-2">
+                    {entry.body}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Registries - full width for mom only, at bottom, minimized in infancy mode */}
         {!isPartnerView && (

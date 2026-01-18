@@ -1,470 +1,325 @@
 // client/src/hooks/usePregnancyState.ts
+// Central state management for pregnancy/postpartum lifecycle
 
-import { useMemo, useState, useEffect, useCallback } from "react";
-import { differenceInDays, format } from "date-fns";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@/hooks/useAuth";
-import { usePartnerAccess } from "@/contexts/PartnerContext";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/hooks/useAuth";
+import { differenceInDays, differenceInWeeks, parseISO } from "date-fns";
 
-const TOTAL_PREGNANCY_WEEKS = 40;
-const TOTAL_PREGNANCY_DAYS = 280; // 40 weeks × 7 days
+// ============================================
+// Types
+// ============================================
 
+export type AppMode = "pregnancy" | "infancy"; // "infancy" = postpartum mode
 export type BabySex = "boy" | "girl" | "unknown";
 
-export interface PregnancyState {
-  dueDate: Date | null;
-  setDueDate: (date: Date | null) => void;
+interface PregnancyProfile {
+  user_id: string;
+  due_date: string | null;
+  baby_name: string | null;
+  baby_sex: BabySex;
+  mom_name: string | null;
+  partner_name: string | null;
+  app_mode: AppMode;
+  baby_birth_date: string | null;
+  onboarding_complete: boolean;
+  infancy_onboarding_complete: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface PregnancyState {
+  // Loading states
   isProfileLoading: boolean;
   isOnboardingComplete: boolean;
-  setIsOnboardingComplete: (isComplete: boolean) => void;
-  refetch: () => void;
-
-  currentWeek: number;
-  currentDay: number; // Day within the current week (0-6)
-  daysRemaining: number;
-  daysPregnant: number; // Total days pregnant
-  today: Date;
-  trimester: 1 | 2 | 3;
-  progress: number;
-
-  babyName: string | null;
-  setBabyName: (name: string | null) => void;
-  babySex: BabySex;
-  setBabySex: (sex: BabySex) => void;
-
-  // Parent names
-  momName: string | null;
-  setMomName: (name: string | null) => void;
-  partnerName: string | null;
-  setPartnerName: (name: string | null) => void;
-
-  // Infancy mode
-  appMode: "pregnancy" | "infancy";
+  
+  // Core dates
+  dueDate: Date | null;
   babyBirthDate: Date | null;
-  setBabyBirthDate: (date: Date | null) => void;
-  infancyOnboardingComplete: boolean;
-  setInfancyOnboardingComplete: (complete: boolean) => void;
+  
+  // Mode
+  appMode: AppMode;
+  
+  // Computed pregnancy values
+  currentWeek: number;
+  daysRemaining: number;
+  trimester: 1 | 2 | 3;
+  
+  // Computed postpartum values
   babyAgeWeeks: number;
   babyAgeDays: number;
+  postpartumWeek: number; // 1-12+ for recovery tracking
+  
+  // Baby info
+  babyName: string | null;
+  babySex: BabySex;
+  
+  // Parent names
+  momName: string | null;
+  partnerName: string | null;
+  
+  // Setters
+  setDueDate: (date: Date | null) => Promise<void>;
+  setBabyName: (name: string | null) => Promise<void>;
+  setBabySex: (sex: BabySex) => Promise<void>;
+  setMomName: (name: string | null) => Promise<void>;
+  setPartnerName: (name: string | null) => Promise<void>;
+  
+  // Mode transitions
   transitionToInfancy: (birthDate: Date) => Promise<void>;
+  setInfancyOnboardingComplete: (complete: boolean) => Promise<void>;
+  
+  // Refresh
+  refetch: () => Promise<void>;
 }
 
-// Helper: parse "yyyy-MM-dd" as LOCAL date (not UTC)
-function parseLocalDate(dateString: string): Date {
-  const [year, month, day] = dateString.split("-").map(Number);
-  return new Date(year, month - 1, day);
+// ============================================
+// Helper Functions
+// ============================================
+
+function calculatePregnancyWeek(dueDate: Date): number {
+  const today = new Date();
+  const daysUntilDue = differenceInDays(dueDate, today);
+  const weeksRemaining = Math.floor(daysUntilDue / 7);
+  const currentWeek = 40 - weeksRemaining;
+  return Math.max(1, Math.min(42, currentWeek));
 }
 
-// Helper: get today's date normalized to local midnight
-function getTodayAtMidnight(): Date {
-  const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+function calculateDaysRemaining(dueDate: Date): number {
+  const today = new Date();
+  return Math.max(0, differenceInDays(dueDate, today));
 }
 
-// Data fetching function for React Query
-const fetchProfileData = async (userId: string | undefined) => {
-  if (!userId) return null;
+function calculateTrimester(week: number): 1 | 2 | 3 {
+  if (week <= 13) return 1;
+  if (week <= 27) return 2;
+  return 3;
+}
 
-  const { data, error } = await supabase
-    .from("pregnancy_profiles")
-    .select("due_date, baby_name, baby_sex, onboarding_complete, mom_name, partner_name, app_mode, baby_birth_date, infancy_onboarding_complete")
-    .eq("user_id", userId)
-    .single();
+function calculateBabyAge(birthDate: Date): { weeks: number; days: number } {
+  const today = new Date();
+  const totalDays = differenceInDays(today, birthDate);
+  return {
+    weeks: Math.floor(totalDays / 7),
+    days: totalDays % 7,
+  };
+}
 
-  if (error && error.code !== "PGRST116") {
-    throw error;
-  }
+function calculatePostpartumWeek(birthDate: Date): number {
+  const today = new Date();
+  const weeks = differenceInWeeks(today, birthDate);
+  return Math.max(1, weeks + 1); // 1-indexed
+}
 
-  return data;
-};
+// ============================================
+// Hook
+// ============================================
 
 export function usePregnancyState(): PregnancyState {
-  const { user, loading: authLoading } = useAuth();
-  const { isPartnerView, momUserId, isLoading: partnerLoading } = usePartnerAccess();
-  const queryClient = useQueryClient();
-
-  // Key insight: When in partner view, fetch the MOM's profile, not the partner's
-  const profileUserId = isPartnerView ? momUserId : user?.id;
-
-  const {
-    data: profile,
-    isLoading: isProfileFetching,
-    refetch,
-  } = useQuery({
-    queryKey: ["pregnancyProfile", profileUserId],
-    queryFn: () => fetchProfileData(profileUserId ?? undefined),
-    enabled: !!profileUserId && !partnerLoading,
-    staleTime: 1000 * 60,
-  });
-
-  const [dueDate, setDueDateState] = useState<Date | null>(null);
-  const [babyNameState, setBabyNameState] = useState<string | null>(null);
-  const [babySexState, setBabySexState] = useState<BabySex>("unknown");
-  const [isOnboardingCompleteState, setIsOnboardingCompleteState] = useState(false);
-  const [momNameState, setMomNameState] = useState<string | null>(null);
-  const [partnerNameState, setPartnerNameState] = useState<string | null>(null);
+  const { user } = useAuth();
   
-  // Infancy state
-  const [appModeState, setAppModeState] = useState<"pregnancy" | "infancy">("pregnancy");
-  const [babyBirthDateState, setBabyBirthDateState] = useState<Date | null>(null);
-  const [infancyOnboardingCompleteState, setInfancyOnboardingCompleteState] = useState(false);
+  const [profile, setProfile] = useState<PregnancyProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Fetch profile
+  const fetchProfile = useCallback(async () => {
+    if (!user) {
+      setProfile(null);
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from("pregnancy_profiles")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (error) throw error;
+      setProfile(data);
+    } catch (err) {
+      console.error("Failed to fetch pregnancy profile:", err);
+      setProfile(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user]);
 
   useEffect(() => {
-    if (profile) {
-      setDueDateState(profile.due_date ? parseLocalDate(profile.due_date) : null);
-      setBabyNameState(profile.baby_name ?? null);
-      setBabySexState(profile.baby_sex ?? "unknown");
-      setIsOnboardingCompleteState(profile.onboarding_complete ?? false);
-      setMomNameState(profile.mom_name ?? null);
-      setPartnerNameState(profile.partner_name ?? null);
-      // Infancy fields
-      setAppModeState(profile.app_mode === "infancy" ? "infancy" : "pregnancy");
-      setBabyBirthDateState(profile.baby_birth_date ? parseLocalDate(profile.baby_birth_date) : null);
-      setInfancyOnboardingCompleteState(profile.infancy_onboarding_complete ?? false);
-    } else if (!isProfileFetching && profileUserId && !authLoading && !partnerLoading) {
-      setDueDateState(null);
-      setBabyNameState(null);
-      setBabySexState("unknown");
-      setIsOnboardingCompleteState(false);
-      setMomNameState(null);
-      setPartnerNameState(null);
-      // Reset infancy fields
-      setAppModeState("pregnancy");
-      setBabyBirthDateState(null);
-      setInfancyOnboardingCompleteState(false);
-    }
-  }, [profile, isProfileFetching, profileUserId, authLoading, partnerLoading]);
+    fetchProfile();
+  }, [fetchProfile]);
 
-  // ✅ FIX: Use midnight local time for consistent date comparisons
-  // This ensures "today" doesn't change based on what time of day it is
-  const today = useMemo(() => getTodayAtMidnight(), []);
+  // Subscribe to realtime updates
+  useEffect(() => {
+    if (!user) return;
 
-  // Partners should not be able to update profile data
-  const setDueDate = useCallback(
-    async (date: Date | null) => {
-      if (isPartnerView) return; // Partners can't edit
-      setDueDateState(date);
-      if (!user) return;
-
-      try {
-        const { error } = await supabase
-          .from("pregnancy_profiles")
-          .update({ due_date: date ? format(date, "yyyy-MM-dd") : null })
-          .eq("user_id", user.id);
-
-        if (error) {
-          console.error("Failed to save due date:", error);
-          refetch();
-        } else {
-          queryClient.invalidateQueries({ queryKey: ["pregnancyProfile", user.id] });
+    const channel = supabase
+      .channel("pregnancy_profile_changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "pregnancy_profiles",
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          if (payload.eventType === "UPDATE" || payload.eventType === "INSERT") {
+            setProfile(payload.new as PregnancyProfile);
+          }
         }
-      } catch (err) {
-        console.error("Failed to save due date:", err);
-        refetch();
-      }
-    },
-    [user, isPartnerView, refetch, queryClient]
-  );
+      )
+      .subscribe();
 
-  const setBabyName = useCallback(
-    async (name: string | null) => {
-      if (isPartnerView) return; // Partners can't edit
-      setBabyNameState(name);
-      if (!user) return;
-
-      try {
-        const { error } = await supabase
-          .from("pregnancy_profiles")
-          .update({ baby_name: name })
-          .eq("user_id", user.id);
-
-        if (error) {
-          console.error("Failed to save baby name:", error);
-          refetch();
-        } else {
-          queryClient.invalidateQueries({ queryKey: ["pregnancyProfile", user.id] });
-        }
-      } catch (err) {
-        console.error("Failed to save baby name:", err);
-        refetch();
-      }
-    },
-    [user, isPartnerView, refetch, queryClient]
-  );
-
-  const setBabySex = useCallback(
-    async (sex: BabySex) => {
-      if (isPartnerView) return; // Partners can't edit
-      setBabySexState(sex);
-      if (!user) return;
-
-      try {
-        const { error } = await supabase
-          .from("pregnancy_profiles")
-          .update({ baby_sex: sex })
-          .eq("user_id", user.id);
-
-        if (error) {
-          console.error("Failed to save baby sex:", error);
-          refetch();
-        } else {
-          queryClient.invalidateQueries({ queryKey: ["pregnancyProfile", user.id] });
-        }
-      } catch (err) {
-        console.error("Failed to save baby sex:", err);
-        refetch();
-      }
-    },
-    [user, isPartnerView, refetch, queryClient]
-  );
-
-  const setMomName = useCallback(
-    async (name: string | null) => {
-      if (isPartnerView) return; // Partners can't edit
-      setMomNameState(name);
-      if (!user) return;
-
-      try {
-        const { error } = await supabase
-          .from("pregnancy_profiles")
-          .update({ mom_name: name })
-          .eq("user_id", user.id);
-
-        if (error) {
-          console.error("Failed to save mom name:", error);
-          refetch();
-        } else {
-          queryClient.invalidateQueries({ queryKey: ["pregnancyProfile", user.id] });
-        }
-      } catch (err) {
-        console.error("Failed to save mom name:", err);
-        refetch();
-      }
-    },
-    [user, isPartnerView, refetch, queryClient]
-  );
-
-  const setPartnerName = useCallback(
-    async (name: string | null) => {
-      if (isPartnerView) return; // Partners can't edit
-      setPartnerNameState(name);
-      if (!user) return;
-
-      try {
-        const { error } = await supabase
-          .from("pregnancy_profiles")
-          .update({ partner_name: name })
-          .eq("user_id", user.id);
-
-        if (error) {
-          console.error("Failed to save partner name:", error);
-          refetch();
-        } else {
-          queryClient.invalidateQueries({ queryKey: ["pregnancyProfile", user.id] });
-        }
-      } catch (err) {
-        console.error("Failed to save partner name:", err);
-        refetch();
-      }
-    },
-    [user, isPartnerView, refetch, queryClient]
-  );
-
-  // Infancy setters
-  const setBabyBirthDate = useCallback(
-    async (date: Date | null) => {
-      if (isPartnerView) return;
-      setBabyBirthDateState(date);
-      if (!user) return;
-
-      try {
-        const { error } = await supabase
-          .from("pregnancy_profiles")
-          .update({ baby_birth_date: date ? format(date, "yyyy-MM-dd") : null })
-          .eq("user_id", user.id);
-
-        if (error) {
-          console.error("Failed to save baby birth date:", error);
-          refetch();
-        } else {
-          queryClient.invalidateQueries({ queryKey: ["pregnancyProfile", user.id] });
-        }
-      } catch (err) {
-        console.error("Failed to save baby birth date:", err);
-        refetch();
-      }
-    },
-    [user, isPartnerView, refetch, queryClient]
-  );
-
-  const setInfancyOnboardingComplete = useCallback(
-    async (complete: boolean) => {
-      if (isPartnerView) return;
-      setInfancyOnboardingCompleteState(complete);
-      if (!user) return;
-
-      try {
-        const { error } = await supabase
-          .from("pregnancy_profiles")
-          .update({ infancy_onboarding_complete: complete })
-          .eq("user_id", user.id);
-
-        if (error) {
-          console.error("Failed to save infancy onboarding:", error);
-          refetch();
-        } else {
-          queryClient.invalidateQueries({ queryKey: ["pregnancyProfile", user.id] });
-        }
-      } catch (err) {
-        console.error("Failed to save infancy onboarding:", err);
-        refetch();
-      }
-    },
-    [user, isPartnerView, refetch, queryClient]
-  );
-
-  // Transition to infancy mode (sets birth date and switches app mode)
-  const transitionToInfancy = useCallback(
-    async (birthDate: Date) => {
-      if (isPartnerView || !user) return;
-
-      setBabyBirthDateState(birthDate);
-      setAppModeState("infancy");
-
-      try {
-        const { error } = await supabase
-          .from("pregnancy_profiles")
-          .update({
-            baby_birth_date: format(birthDate, "yyyy-MM-dd"),
-            app_mode: "infancy",
-          })
-          .eq("user_id", user.id);
-
-        if (error) {
-          console.error("Failed to transition to infancy:", error);
-          refetch();
-        } else {
-          queryClient.invalidateQueries({ queryKey: ["pregnancyProfile", user.id] });
-        }
-      } catch (err) {
-        console.error("Failed to transition to infancy:", err);
-        refetch();
-      }
-    },
-    [user, isPartnerView, refetch, queryClient]
-  );
-
-  // Calculate baby's age in weeks/days (for infancy mode)
-  const infancyMetrics = useMemo(() => {
-    if (!babyBirthDateState) {
-      return { babyAgeWeeks: 0, babyAgeDays: 0 };
-    }
-
-    const totalDays = differenceInDays(today, babyBirthDateState);
-    if (totalDays < 0) {
-      return { babyAgeWeeks: 0, babyAgeDays: 0 };
-    }
-
-    const babyAgeWeeks = Math.floor(totalDays / 7);
-    const babyAgeDays = totalDays % 7;
-
-    return { babyAgeWeeks, babyAgeDays };
-  }, [babyBirthDateState, today]);
-
-  const pregnancyMetrics = useMemo(() => {
-    if (!dueDate) {
-      return {
-        currentWeek: 0,
-        currentDay: 0,
-        daysRemaining: TOTAL_PREGNANCY_DAYS,
-        daysPregnant: 0,
-        trimester: 1 as const,
-        progress: 0,
-      };
-    }
-
-    // ✅ FIX: Use days-based calculation for accuracy
-    // differenceInWeeks truncates, which can cause week to be off by 1
-    const daysUntilDue = differenceInDays(dueDate, today);
-    const daysRemaining = Math.max(0, daysUntilDue);
-    
-    // Calculate gestational age in days
-    // If due date is 280 days from conception, then:
-    // daysPregnant = 280 - daysUntilDue
-    const daysPregnant = TOTAL_PREGNANCY_DAYS - daysUntilDue;
-    
-    // ✅ FIX: Correct week calculation
-    // Medical convention: Week 1 = days 0-6, Week 2 = days 7-13, etc.
-    // So week number = floor(daysPregnant / 7) + 1
-    // But we also need to handle edge cases (before conception, past due)
-    let currentWeek: number;
-    let currentDay: number;
-    
-    if (daysPregnant < 0) {
-      // Before conception (due date is more than 280 days away)
-      currentWeek = 0;
-      currentDay = 0;
-    } else {
-      // Normal case: calculate week and day
-      // Week 1 starts at day 0, Week 2 at day 7, etc.
-      currentWeek = Math.floor(daysPregnant / 7) + 1;
-      currentDay = daysPregnant % 7; // Day within the week (0-6)
-      
-      // Cap at week 42 (2 weeks past due date)
-      currentWeek = Math.min(42, currentWeek);
-    }
-
-    // Determine trimester
-    // Trimester 1: Weeks 1-13
-    // Trimester 2: Weeks 14-27
-    // Trimester 3: Weeks 28-40+
-    let trimester: 1 | 2 | 3 = 1;
-    if (currentWeek >= 28) {
-      trimester = 3;
-    } else if (currentWeek >= 14) {
-      trimester = 2;
-    }
-
-    // Progress percentage (0-100)
-    const progress = Math.min(100, Math.max(0, (currentWeek / TOTAL_PREGNANCY_WEEKS) * 100));
-
-    return { 
-      currentWeek, 
-      currentDay, 
-      daysRemaining, 
-      daysPregnant: Math.max(0, daysPregnant),
-      trimester, 
-      progress 
+    return () => {
+      supabase.removeChannel(channel);
     };
-  }, [dueDate, today]);
+  }, [user]);
 
-  const isProfileLoading = authLoading || partnerLoading || isProfileFetching;
+  // Parse dates
+  const dueDate = useMemo(() => {
+    if (!profile?.due_date) return null;
+    try {
+      return parseISO(profile.due_date);
+    } catch {
+      return null;
+    }
+  }, [profile?.due_date]);
+
+  const babyBirthDate = useMemo(() => {
+    if (!profile?.baby_birth_date) return null;
+    try {
+      return parseISO(profile.baby_birth_date);
+    } catch {
+      return null;
+    }
+  }, [profile?.baby_birth_date]);
+
+  // Computed values
+  const currentWeek = useMemo(() => {
+    if (!dueDate) return 0;
+    return calculatePregnancyWeek(dueDate);
+  }, [dueDate]);
+
+  const daysRemaining = useMemo(() => {
+    if (!dueDate) return 0;
+    return calculateDaysRemaining(dueDate);
+  }, [dueDate]);
+
+  const trimester = useMemo(() => {
+    return calculateTrimester(currentWeek);
+  }, [currentWeek]);
+
+  const babyAge = useMemo(() => {
+    if (!babyBirthDate) return { weeks: 0, days: 0 };
+    return calculateBabyAge(babyBirthDate);
+  }, [babyBirthDate]);
+
+  const postpartumWeek = useMemo(() => {
+    if (!babyBirthDate) return 0;
+    return calculatePostpartumWeek(babyBirthDate);
+  }, [babyBirthDate]);
+
+  // Setters
+  const setDueDate = useCallback(async (date: Date | null) => {
+    if (!user) return;
+    const { error } = await supabase
+      .from("pregnancy_profiles")
+      .update({ due_date: date?.toISOString().split("T")[0] || null })
+      .eq("user_id", user.id);
+    if (error) throw error;
+  }, [user]);
+
+  const setBabyName = useCallback(async (name: string | null) => {
+    if (!user) return;
+    const { error } = await supabase
+      .from("pregnancy_profiles")
+      .update({ baby_name: name })
+      .eq("user_id", user.id);
+    if (error) throw error;
+  }, [user]);
+
+  const setBabySex = useCallback(async (sex: BabySex) => {
+    if (!user) return;
+    const { error } = await supabase
+      .from("pregnancy_profiles")
+      .update({ baby_sex: sex })
+      .eq("user_id", user.id);
+    if (error) throw error;
+  }, [user]);
+
+  const setMomName = useCallback(async (name: string | null) => {
+    if (!user) return;
+    const { error } = await supabase
+      .from("pregnancy_profiles")
+      .update({ mom_name: name })
+      .eq("user_id", user.id);
+    if (error) throw error;
+  }, [user]);
+
+  const setPartnerName = useCallback(async (name: string | null) => {
+    if (!user) return;
+    const { error } = await supabase
+      .from("pregnancy_profiles")
+      .update({ partner_name: name })
+      .eq("user_id", user.id);
+    if (error) throw error;
+  }, [user]);
+
+  const transitionToInfancy = useCallback(async (birthDate: Date) => {
+    if (!user) return;
+    const { error } = await supabase
+      .from("pregnancy_profiles")
+      .update({
+        app_mode: "infancy",
+        baby_birth_date: birthDate.toISOString(),
+      })
+      .eq("user_id", user.id);
+    if (error) throw error;
+  }, [user]);
+
+  const setInfancyOnboardingComplete = useCallback(async (complete: boolean) => {
+    if (!user) return;
+    const { error } = await supabase
+      .from("pregnancy_profiles")
+      .update({ infancy_onboarding_complete: complete })
+      .eq("user_id", user.id);
+    if (error) throw error;
+  }, [user]);
 
   return {
+    isProfileLoading: isLoading,
+    isOnboardingComplete: profile?.onboarding_complete ?? false,
+    
     dueDate,
+    babyBirthDate,
+    
+    appMode: profile?.app_mode ?? "pregnancy",
+    
+    currentWeek,
+    daysRemaining,
+    trimester,
+    
+    babyAgeWeeks: babyAge.weeks,
+    babyAgeDays: babyAge.days,
+    postpartumWeek,
+    
+    babyName: profile?.baby_name ?? null,
+    babySex: profile?.baby_sex ?? "unknown",
+    
+    momName: profile?.mom_name ?? null,
+    partnerName: profile?.partner_name ?? null,
+    
     setDueDate,
-    today,
-    ...pregnancyMetrics,
-    babyName: babyNameState,
     setBabyName,
-    babySex: babySexState,
     setBabySex,
-    momName: momNameState,
     setMomName,
-    partnerName: partnerNameState,
     setPartnerName,
-    isProfileLoading,
-    isOnboardingComplete: isOnboardingCompleteState,
-    setIsOnboardingComplete: setIsOnboardingCompleteState,
-    refetch,
-    // Infancy fields
-    appMode: appModeState,
-    babyBirthDate: babyBirthDateState,
-    setBabyBirthDate,
-    infancyOnboardingComplete: infancyOnboardingCompleteState,
-    setInfancyOnboardingComplete,
-    ...infancyMetrics,
+    
     transitionToInfancy,
+    setInfancyOnboardingComplete,
+    
+    refetch: fetchProfile,
   };
 }

@@ -170,7 +170,7 @@ Keep your tone warm, supportive, and calm. Avoid medical jargon.
     : "Is this normal? What can I try?";
 
   return (
-    <section className="bg-secondary/40 rounded-3xl border border-border/60 px-6 py-6 md:px-10 md:py-8">
+    <section className="bg-primary/10 rounded-3xl border border-primary/30 px-6 py-6 md:px-10 md:py-8">
       {/* Header */}
       <div className="flex items-center justify-between gap-3 mb-3">
         <div>
@@ -181,7 +181,7 @@ Keep your tone warm, supportive, and calm. Avoid medical jargon.
             {subtitleText}
           </p>
         </div>
-        <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 border border-border/50 px-3 py-1 text-[10px] font-medium text-muted-foreground">
+        <span className="inline-flex items-center gap-1 rounded-full bg-primary/20 px-3 py-1 text-[10px] font-medium text-foreground">
           <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
           Powered by Ivy
         </span>
@@ -210,7 +210,7 @@ Keep your tone warm, supportive, and calm. Avoid medical jargon.
       {/* Ask Ivy input */}
       <form
         onSubmit={handleAsk}
-        className="mt-2 flex flex-col gap-3 border-t border-border/60 pt-4"
+        className="mt-2 flex flex-col gap-3 border-t border-primary/20 pt-4"
       >
         <p className="text-[11px] text-muted-foreground">
           {appMode === "infancy" 
@@ -223,13 +223,13 @@ Keep your tone warm, supportive, and calm. Avoid medical jargon.
             placeholder={placeholderText}
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
-            className="flex-1 text-sm text-foreground placeholder:text-muted-foreground"
+            className="flex-1 text-sm"
             disabled={limitReached}
           />
           <Button
             type="submit"
             disabled={loading || limitReached || !question.trim()}
-            className="md:w-28 shrink-0 bg-primary text-primary-foreground hover:bg-primary/90"
+            className="md:w-28 shrink-0"
           >
             {loading ? (
               <>
@@ -248,7 +248,7 @@ Keep your tone warm, supportive, and calm. Avoid medical jargon.
             {remaining} of {dailyLimit} question{dailyLimit !== 1 ? "s" : ""} remaining today
           </span>
           {!isPaid && remaining === 0 && (
-            <Button variant="link" size="sm" className="text-foreground p-0 h-auto text-[11px]">
+            <Button variant="link" size="sm" className="text-primary p-0 h-auto text-[11px]">
               Upgrade for more
             </Button>
           )}
@@ -269,7 +269,7 @@ Keep your tone warm, supportive, and calm. Avoid medical jargon.
           <p className="text-sm text-foreground">You've reached today's question limit.</p>
           {!isPaid && (
             <p className="text-xs text-muted-foreground mt-1">
-              <Button variant="link" className="text-foreground p-0 h-auto text-xs">
+              <Button variant="link" className="text-primary p-0 h-auto text-xs">
                 Upgrade to Premium
               </Button>{" "}
               for 5 questions per day.
