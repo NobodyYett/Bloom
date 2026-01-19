@@ -27,4 +27,14 @@ end
 
 post_install do |installer|
   assertDeploymentTarget(installer)
+
+  installer.pods_project.targets.each do |t|
+    t.build_configurations.each do |config|
+      # Fix Xcode sandbox "file-read-data denied" during [CP] scripts
+      config.build_settings['ENABLE_USER_SCRIPT_SANDBOXING'] = 'NO'
+
+      # Fix RevenueCat pod compile error: "Switch must be exhaustive (.unsupported)"
+      config.build_settings['SWIFT_VERSION'] = '5.0'
+    end
+  end
 end

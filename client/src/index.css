@@ -291,3 +291,16 @@
   50% { transform: translateX(25px) rotate(25deg); }
   100% { top: 110%; opacity: 0; transform: translateX(-25px) rotate(60deg); }
 }
+
+/* ============================================
+   Mobile nav safe-area support
+   ============================================ */
+.safe-area-top {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 4rem);
+}
+
+@media (min-width: 768px) {
+  .safe-area-top {
+    padding-top: 2rem;
+  }
+}

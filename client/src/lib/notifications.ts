@@ -5,31 +5,53 @@ import { LocalNotifications } from "@capacitor/local-notifications";
 
 // Notification IDs
 const MORNING_CHECKIN_ID = 8831;
+const MIDDAY_WELLNESS_ID = 8832;
 const EVENING_CHECKIN_ID = 8830;
-const APPOINTMENT_REMINDER_BASE_ID = 9000; // We'll add appointment id hash to this
+const APPOINTMENT_REMINDER_BASE_ID = 9000;
 
 // Storage keys
 const MORNING_STORAGE_KEY = "bloom_morning_checkin_enabled";
+const MIDDAY_STORAGE_KEY = "bloom_midday_wellness_enabled";
 const EVENING_STORAGE_KEY = "bloom_evening_checkin_enabled";
 const APPOINTMENT_REMINDERS_KEY = "bloom_appointment_reminders_enabled";
 const DEFAULT_REMINDER_TIMES_KEY = "bloom_default_reminder_times";
-const LAST_MORNING_SENT_KEY = "bloom_last_morning_sent";
-const LAST_EVENING_SENT_KEY = "bloom_last_evening_sent";
 
 // Default reminder times (in minutes before appointment)
 export const DEFAULT_REMINDER_MINUTES = [1440, 60]; // 24 hours, 1 hour
 
 export interface ReminderTimePreference {
-  firstReminder: number; // minutes before (default 1440 = 24 hours)
-  secondReminder: number; // minutes before (default 60 = 1 hour)
+  firstReminder: number;
+  secondReminder: number;
 }
 
 export function isNotificationsSupported(): boolean {
   return Capacitor.isNativePlatform();
 }
 
+// ---- Midday wellness tips (subset of nudges for notifications) ----
+const MIDDAY_TIPS = [
+  "Stay hydrated! Have you had a glass of water recently?",
+  "Time for a stretch break. Your body will thank you.",
+  "Take 3 deep breaths. In through your nose, out through your mouth.",
+  "A short walk can boost your energy and mood.",
+  "Remember to eat something nutritious today.",
+  "Step outside for some fresh air and sunlight if you can.",
+  "Check your posture and give your shoulders a roll.",
+  "You're doing amazing. Take a moment to appreciate yourself.",
+  "Keep a water bottle nearby—small sips add up.",
+  "If you've been sitting, stand up and stretch your legs.",
+];
+
+function getRandomMiddayTip(): string {
+  const today = new Date();
+  const dayOfYear = Math.floor(
+    (today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 86400000
+  );
+  // Use day of year to pick a consistent tip for the day
+  return MIDDAY_TIPS[dayOfYear % MIDDAY_TIPS.length];
+}
+
 // ---- Morning Check-in (8:30 AM) ----
-// "Good morning! How did you sleep?"
 
 export function isMorningCheckinEnabled(): boolean {
   const stored = localStorage.getItem(MORNING_STORAGE_KEY);
@@ -39,21 +61,6 @@ export function isMorningCheckinEnabled(): boolean {
 
 export function setMorningCheckinEnabled(enabled: boolean): void {
   localStorage.setItem(MORNING_STORAGE_KEY, enabled ? "true" : "false");
-}
-
-function getTodayDateString(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
-}
-
-function shouldSendMorningNotification(): boolean {
-  const lastSent = localStorage.getItem(LAST_MORNING_SENT_KEY);
-  const today = getTodayDateString();
-  return lastSent !== today;
-}
-
-function markMorningSent(): void {
-  localStorage.setItem(LAST_MORNING_SENT_KEY, getTodayDateString());
 }
 
 export async function scheduleMorningCheckin(): Promise<boolean> {
@@ -66,6 +73,7 @@ export async function scheduleMorningCheckin(): Promise<boolean> {
       if (!granted) return false;
     }
     
+    // Always cancel first to prevent duplicates
     await cancelMorningCheckin();
     
     const now = new Date();
@@ -81,7 +89,7 @@ export async function scheduleMorningCheckin(): Promise<boolean> {
       notifications: [
         {
           id: MORNING_CHECKIN_ID,
-          title: "Good morning",
+          title: "Good morning ☀️",
           body: "How did you sleep? Take a moment to check in.",
           schedule: { at: scheduledTime, repeats: true, every: "day" },
           sound: "default",
@@ -119,15 +127,90 @@ export async function toggleMorningCheckin(enable: boolean): Promise<boolean> {
   }
 }
 
-// Alias for backwards compatibility
+// Aliases for backwards compatibility
 export const isMorningGuidanceEnabled = isMorningCheckinEnabled;
 export const setMorningGuidanceEnabled = setMorningCheckinEnabled;
 export const scheduleMorningGuidance = scheduleMorningCheckin;
 export const cancelMorningGuidance = cancelMorningCheckin;
 export const toggleMorningGuidance = toggleMorningCheckin;
 
+// ---- Midday Wellness (12:30 PM) ----
+
+export function isMiddayWellnessEnabled(): boolean {
+  const stored = localStorage.getItem(MIDDAY_STORAGE_KEY);
+  if (stored === null) return false; // OFF by default (less intrusive)
+  return stored === "true";
+}
+
+export function setMiddayWellnessEnabled(enabled: boolean): void {
+  localStorage.setItem(MIDDAY_STORAGE_KEY, enabled ? "true" : "false");
+}
+
+export async function scheduleMiddayWellness(): Promise<boolean> {
+  if (!isNotificationsSupported()) return false;
+  
+  try {
+    const hasPermission = await hasNotificationPermission();
+    if (!hasPermission) {
+      const granted = await requestNotificationPermission();
+      if (!granted) return false;
+    }
+    
+    // Always cancel first to prevent duplicates
+    await cancelMiddayWellness();
+    
+    const now = new Date();
+    const scheduledTime = new Date();
+    scheduledTime.setHours(12, 30, 0, 0);
+    
+    // If it's past 12:30pm today, schedule for tomorrow
+    if (now > scheduledTime) {
+      scheduledTime.setDate(scheduledTime.getDate() + 1);
+    }
+    
+    await LocalNotifications.schedule({
+      notifications: [
+        {
+          id: MIDDAY_WELLNESS_ID,
+          title: "Midday moment 🌿",
+          body: getRandomMiddayTip(),
+          schedule: { at: scheduledTime, repeats: true, every: "day" },
+          sound: "default",
+          smallIcon: "ic_stat_icon_config_sample",
+          iconColor: "#5A8F7B",
+        },
+      ],
+    });
+    
+    console.log("Midday wellness scheduled for 12:30pm daily");
+    return true;
+  } catch (error) {
+    console.error("Failed to schedule midday wellness:", error);
+    return false;
+  }
+}
+
+export async function cancelMiddayWellness(): Promise<void> {
+  if (!isNotificationsSupported()) return;
+  try {
+    await LocalNotifications.cancel({ notifications: [{ id: MIDDAY_WELLNESS_ID }] });
+    console.log("Midday wellness cancelled");
+  } catch (error) {
+    console.error("Failed to cancel midday wellness:", error);
+  }
+}
+
+export async function toggleMiddayWellness(enable: boolean): Promise<boolean> {
+  setMiddayWellnessEnabled(enable);
+  if (enable) {
+    return await scheduleMiddayWellness();
+  } else {
+    await cancelMiddayWellness();
+    return true;
+  }
+}
+
 // ---- Evening Check-in (8:30 PM) ----
-// "How was your day? Take a moment to reflect."
 
 export function isEveningCheckinEnabled(): boolean {
   const stored = localStorage.getItem(EVENING_STORAGE_KEY);
@@ -137,16 +220,6 @@ export function isEveningCheckinEnabled(): boolean {
 
 export function setEveningCheckinEnabled(enabled: boolean): void {
   localStorage.setItem(EVENING_STORAGE_KEY, enabled ? "true" : "false");
-}
-
-function shouldSendEveningNotification(): boolean {
-  const lastSent = localStorage.getItem(LAST_EVENING_SENT_KEY);
-  const today = getTodayDateString();
-  return lastSent !== today;
-}
-
-function markEveningSent(): void {
-  localStorage.setItem(LAST_EVENING_SENT_KEY, getTodayDateString());
 }
 
 export async function scheduleEveningCheckin(): Promise<boolean> {
@@ -159,6 +232,7 @@ export async function scheduleEveningCheckin(): Promise<boolean> {
       if (!granted) return false;
     }
     
+    // Always cancel first to prevent duplicates
     await cancelEveningCheckin();
     
     const now = new Date();
@@ -174,8 +248,8 @@ export async function scheduleEveningCheckin(): Promise<boolean> {
       notifications: [
         {
           id: EVENING_CHECKIN_ID,
-          title: "Evening check-in",
-          body: "How was your day? Take a moment to reflect.",
+          title: "Evening reflection 🌙",
+          body: "How was your day? Take a moment to check in.",
           schedule: { at: scheduledTime, repeats: true, every: "day" },
           sound: "default",
           smallIcon: "ic_stat_icon_config_sample",
@@ -212,7 +286,7 @@ export async function toggleEveningCheckin(enable: boolean): Promise<boolean> {
   }
 }
 
-// Alias for backwards compatibility
+// Aliases for backwards compatibility
 export const isNightReminderEnabled = isEveningCheckinEnabled;
 export const setNightReminderEnabled = setEveningCheckinEnabled;
 export const scheduleNightReminder = scheduleEveningCheckin;
@@ -318,7 +392,7 @@ export async function scheduleAppointmentReminders(
       
       notifications.push({
         id: notificationId,
-        title: "Appointment Reminder",
+        title: "Appointment Reminder 📅",
         body: `${appointment.title}${locationText} is ${timeLabel}.`,
         schedule: { at: reminderTime },
         sound: "default",
@@ -361,9 +435,6 @@ export async function cancelAppointmentReminders(appointmentId: string): Promise
 
 export async function toggleAppointmentReminders(enable: boolean): Promise<boolean> {
   setAppointmentRemindersEnabled(enable);
-  // Note: This doesn't reschedule existing appointments - that would require
-  // fetching all appointments from the database. Individual appointments
-  // will respect this setting when created/updated.
   return true;
 }
 
@@ -391,18 +462,39 @@ export async function hasNotificationPermission(): Promise<boolean> {
   }
 }
 
+// Cancel ALL daily notifications to start fresh (useful for debugging/resetting)
+export async function cancelAllDailyNotifications(): Promise<void> {
+  if (!isNotificationsSupported()) return;
+  try {
+    await LocalNotifications.cancel({
+      notifications: [
+        { id: MORNING_CHECKIN_ID },
+        { id: MIDDAY_WELLNESS_ID },
+        { id: EVENING_CHECKIN_ID },
+      ],
+    });
+    console.log("All daily notifications cancelled");
+  } catch (error) {
+    console.error("Failed to cancel all daily notifications:", error);
+  }
+}
+
 export async function initializeNotifications(): Promise<void> {
   if (!isNotificationsSupported()) return;
   
-  // Initialize morning check-in
-  const morningEnabled = isMorningCheckinEnabled();
-  if (morningEnabled) {
+  // Cancel all first to prevent duplicates from accumulating
+  await cancelAllDailyNotifications();
+  
+  // Re-schedule based on current preferences
+  if (isMorningCheckinEnabled()) {
     await scheduleMorningCheckin();
   }
   
-  // Initialize evening check-in
-  const eveningEnabled = isEveningCheckinEnabled();
-  if (eveningEnabled) {
+  if (isMiddayWellnessEnabled()) {
+    await scheduleMiddayWellness();
+  }
+  
+  if (isEveningCheckinEnabled()) {
     await scheduleEveningCheckin();
   }
   

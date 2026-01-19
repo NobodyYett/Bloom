@@ -1,109 +1,404 @@
-# Bloom — Project Handoff
+Bloom — Full Project Handoff (Authoritative)
+Pinned repo state (SOURCE OF TRUTH)
 
-## What this repo is
-Bloom is a pregnancy + newborn companion app (mom + partner). It runs as:
-- Web (Vite/React) for development
-- Mobile via Capacitor (iOS/Android)
+Repo: https://github.com/NobodyYett/Bloom
 
-Core features include timeline/week guidance, journal, feeding tracker, appointments, partner access, and a premium subscription paywall.
+Branch: main
 
-## Current status (high-level)
-- App works end-to-end for core flows (auth → onboarding → home/timeline/journal/settings).
-- Premium is intended to be **server-authoritative** (RevenueCat → Supabase Edge Function → DB update).
-- Partner access is derived from mom’s premium (partners should not be able to purchase premium themselves).
+Commit: c105b42
 
-## Tech stack
-- Frontend: React + Vite (client/)
-- Mobile shell: Capacitor (ios/, android/)
-- Backend: Supabase (Auth + Postgres + Edge Functions under supabase/functions/)
-- Subscriptions: RevenueCat
-- “Ivy” assistant: Supabase Edge Function (supabase/functions/ask-ivy)
+⚠️ This handoff assumes the repo is checked out at exactly this commit.
+If behavior differs, verify the commit hash before debugging anything else.
 
-## Golden rules / constraints (do not break)
-### 1) Premium must be server-authoritative
-The client must never set premium directly in the database.
-- Client: reads premium state
-- RevenueCat webhook: is the source of truth
-- Supabase Edge Function uses service-role key to update premium state
+What Bloom is (product-level context)
 
-### 2) Partner cannot buy premium
-Partner access is granted only if mom is premium.
-Partner screens may show a “partner paywall” state but should not expose purchase buttons.
+Bloom is a pregnancy → newborn companion app built for two roles:
 
-## RevenueCat + Premium flow (expected architecture)
-### Source of truth
-RevenueCat events → Supabase Edge Function:
-- Function: `supabase/functions/revenuecat-webhook/index.ts`
+Mom (primary account holder)
 
-The function:
-- Verifies requests via Authorization header (`Bearer <REVENUECAT_WEBHOOK_SECRET>`)
-- Uses Supabase `service_role` to update `pregnancy_profiles.is_premium`
-- Skips anonymous RC IDs (`$RCAnonymousID...`)
-- Grants premium for purchase/renewal-like events
-- Revokes premium for cancellation/expiration/billing issues
-- Handles TRANSFER by revoking old and granting new
+Partner (secondary, dependent account)
 
-### Client behavior
-Client should:
-- Trigger purchase via RevenueCat SDK (see `client/src/lib/purchases.ts`)
-- Never write `is_premium` directly
-- Read premium state from Supabase and update UI accordingly (PremiumContext)
+The app intentionally enforces asymmetric power:
 
-## Supabase content included in repo
-This repo includes:
-- Edge Functions under `supabase/functions/*` (including RevenueCat webhook + ask-ivy)
-- Schema artifacts under `supabase/schema/` (if present)
+Mom controls premium
 
-What is NOT guaranteed to be represented fully in code:
-- RLS policies
-- Database triggers
-- SQL functions/RPCs
-- Production environment variables
-These must be verified in the Supabase dashboard / migrations.
+Partner inherits access
 
-## Required environment variables (names only)
-### App (web/mobile)
-- `VITE_SUPABASE_URL`
-- `VITE_SUPABASE_ANON_KEY`
-- `VITE_REVENUECAT_API_KEY` (or platform-specific RC keys, depending on implementation)
+Partner cannot independently monetize
 
-### Supabase Edge Function (revenuecat-webhook)
-- `REVENUECAT_WEBHOOK_SECRET`
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
+Bloom is designed to scale from:
 
-## What is intentionally excluded from the handoff zip (and why)
-For security + portability, the shared zip/hand-off artifact excludes:
-- `.env*` (secrets)
-- `node_modules/` (reinstallable)
-- `.git/`, `.idea/` (local tooling)
-- build outputs (`dist/`, `build/`, gradle/Pods/DerivedData, etc.)
-- generated mobile public asset bundles (`ios/App/App/public/`, `android/app/src/main/assets/public/`) to keep size down
+Pregnancy (weekly growth, guidance)
 
-If something “works on my machine” but not elsewhere, re-check these excluded/generated artifacts.
+Birth
 
-## Where to look first (key files)
-- RevenueCat webhook: `supabase/functions/revenuecat-webhook/index.ts`
-- Purchase helper: `client/src/lib/purchases.ts`
-- Premium state: `client/src/contexts/PremiumContext.tsx`
-- Paywall screens:
-  - `client/src/pages/subscribe.tsx`
-  - `client/src/pages/partner-paywall.tsx`
-- Premium gating component: `client/src/components/premium-lock.tsx`
-- Settings entrypoint: `client/src/pages/settings.tsx`
-- App routing/root: `client/src/App.tsx`
+Early infancy (feeding, logs, support)
 
-## Run / dev commands
-(Adjust if your package scripts differ.)
-- Install: `npm ci`
-- Web dev: `npm run dev`
-- iOS (Capacitor): `npx cap sync ios && npx cap open ios`
-- Android (Capacitor): `npx cap sync android && npx cap open android`
+Supported platforms
 
-## Known risks / verification checklist (do this before shipping)
-- Confirm RevenueCat webhook is configured to hit the deployed Supabase function URL.
-- Confirm the webhook secret matches `REVENUECAT_WEBHOOK_SECRET`.
-- Confirm DB rules prevent client-side writes to `pregnancy_profiles.is_premium` (RLS/trigger).
-- Confirm partner cannot initiate purchase (no purchase button / no purchase call path).
-- Confirm premium UI updates after webhook events (may not be “instant” depending on polling/realtime wiring).
+Bloom is one codebase deployed across:
 
+Web (development + testing)
+
+Vite + React
+
+iOS
+
+Capacitor shell
+
+Android
+
+Capacitor shell
+
+There is no separate mobile frontend.
+Everything flows from the client/ app.
+
+High-level system architecture
+Client (React / Capacitor)
+  |
+  |  Auth, Reads, Writes (allowed fields only)
+  v
+Supabase
+  ├─ Auth
+  ├─ Postgres (RLS enforced)
+  ├─ Realtime (optional)
+  └─ Edge Functions
+        ├─ revenuecat-webhook  <-- PREMIUM SOURCE OF TRUTH
+        └─ ask-ivy (AI helper)
+  ^
+  |
+RevenueCat
+  └─ Purchases, renewals, cancellations
+
+Source of truth for project structure (IMPORTANT)
+
+When handing this project to a new AI:
+
+❌ Do NOT send:
+
+ZIP file listings
+
+Finder trees
+
+ls -R output
+
+✅ Always send:
+
+git ls-files > project_tree.txt
+
+
+Why:
+
+Only git-tracked files matter
+
+Generated assets are intentionally excluded
+
+Prevents AI from hallucinating files that don’t exist
+
+Core architectural rules (DO NOT BREAK)
+Rule 1 — Premium is server-authoritative
+
+The client must NEVER set premium directly. Ever.
+
+Forbidden:
+
+update pregnancy_profiles set is_premium = true from client
+
+Trusting RevenueCat SDK state alone
+
+Client-side fallbacks
+
+Correct flow:
+
+Client → RevenueCat purchase
+RevenueCat → Webhook
+Webhook → Supabase Edge Function (service role)
+Edge Function → DB update
+Client → reads updated premium state
+
+
+If you break this, the entire paywall becomes insecure.
+
+Rule 2 — Partner cannot buy premium
+
+Partners:
+
+Do not see purchase buttons
+
+Do not call RevenueCat purchase APIs
+
+Cannot “upgrade themselves in”
+
+Partners inherit access only if the mom is premium.
+
+This is enforced both:
+
+In UI
+
+In data model assumptions
+
+RevenueCat implementation (critical section)
+Canonical file
+supabase/functions/revenuecat-webhook/index.ts
+
+
+This file is the only place premium status is written.
+
+Webhook verification
+
+Uses Authorization header
+
+Expected format:
+
+Bearer <REVENUECAT_WEBHOOK_SECRET>
+
+
+Requests without this are rejected.
+
+Event handling logic
+
+Premium GRANT events
+
+INITIAL_PURCHASE
+
+RENEWAL
+
+UNCANCELLATION
+
+NON_RENEWING_PURCHASE
+
+SUBSCRIPTION_EXTENDED
+
+PRODUCT_CHANGE
+
+→ Sets:
+
+is_premium = true
+
+
+Premium REVOKE events
+
+CANCELLATION
+
+EXPIRATION
+
+BILLING_ISSUE
+
+→ Sets:
+
+is_premium = false
+
+
+TRANSFER events
+Handled explicitly:
+
+Revoke old user
+
+Grant new user
+
+Anonymous user protection
+
+Events with:
+
+$RCAnonymousID...
+
+
+are ignored.
+
+This prevents ghost upgrades.
+
+Client-side premium behavior
+Client responsibilities
+
+Trigger purchases via RevenueCat SDK
+
+Never write is_premium
+
+Treat Supabase as truth
+
+React to premium state changes
+
+Key files
+
+client/src/lib/purchases.ts
+
+client/src/contexts/PremiumContext.tsx
+
+client/src/components/premium-lock.tsx
+
+Partner logic (important)
+
+Partner access is:
+
+Derived, not stored independently
+
+Based on mom’s is_premium
+
+Partner UI:
+
+May show “Partner paywall” info screen
+
+Must NOT show purchase CTA
+
+Relevant files:
+
+client/src/pages/partner-paywall.tsx
+
+client/src/contexts/PartnerContext.tsx
+
+Supabase: what is included vs NOT included
+Included in repo
+
+Edge Functions:
+
+supabase/functions/revenuecat-webhook
+
+supabase/functions/ask-ivy
+
+Any tracked schema files under:
+
+supabase/schema/
+
+NOT included / must be verified manually
+
+These are intentionally not in code:
+
+RLS policies
+
+DB triggers
+
+SQL functions / RPCs
+
+Production environment variables
+
+These live in:
+
+Supabase dashboard
+
+Supabase migrations (if added later)
+
+⚠️ Do not assume RLS exists unless you verify it.
+
+Required environment variables (names only)
+Client (web + mobile)
+
+VITE_SUPABASE_URL
+
+VITE_SUPABASE_ANON_KEY
+
+VITE_REVENUECAT_API_KEY
+
+Supabase Edge Function
+
+REVENUECAT_WEBHOOK_SECRET
+
+SUPABASE_URL
+
+SUPABASE_SERVICE_ROLE_KEY
+
+What was intentionally excluded from the handoff artifact
+
+Any ZIP / handoff copy excludes:
+
+Security
+
+.env
+
+.env.*
+
+Reinstallable
+
+node_modules/
+
+Generated
+
+dist/
+
+build/
+
+Gradle builds
+
+Pods
+
+DerivedData
+
+Large generated mobile bundles
+
+ios/App/App/public/
+
+android/app/src/main/assets/public/
+
+These are regenerated via:
+
+npm ci
+npm run dev
+npx cap sync
+
+Where to start reading code (in order)
+
+RevenueCat truth
+
+supabase/functions/revenuecat-webhook/index.ts
+
+Client purchase abstraction
+
+client/src/lib/purchases.ts
+
+Premium state plumbing
+
+client/src/contexts/PremiumContext.tsx
+
+UI gating
+
+client/src/components/premium-lock.tsx
+
+Paywall UX
+
+client/src/pages/subscribe.tsx
+
+client/src/pages/partner-paywall.tsx
+
+App entry
+
+client/src/App.tsx
+
+Dev commands
+npm ci
+npm run dev
+
+
+Capacitor:
+
+npx cap sync ios
+npx cap open ios
+
+npx cap sync android
+npx cap open android
+
+Pre-ship verification checklist
+
+ RevenueCat webhook URL is deployed + correct
+
+ Webhook secret matches Supabase env
+
+ Client cannot write is_premium
+
+ Partner cannot trigger purchase
+
+ Premium UI updates after webhook events
+
+ No fallback client-side premium logic exists
+
+Why this handoff exists
+
+This document exists to ensure:
+
+No logic is reimplemented unnecessarily
+
+Premium security is not weakened
+
+Partner model is preserved
+
+New contributors (human or AI) understand intent, not just code
+
+If something seems “missing,” assume it was intentional and check this document before rebuilding it.

@@ -2,6 +2,7 @@
 .gitignore
 .npmrc
 .replit
+HANDOFF.md
 android/.gitignore
 android/app/.gitignore
 android/app/build.gradle

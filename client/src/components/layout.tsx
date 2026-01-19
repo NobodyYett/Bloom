@@ -12,7 +12,7 @@ import {
   Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { format, differenceInDays } from "date-fns";
 import { useAuth } from "@/hooks/useAuth";
@@ -76,7 +76,10 @@ export function Layout({ children, dueDate, setDueDate, appMode = "pregnancy", b
   };
 
   const SidebarContent = () => (
-    <div className="flex flex-col h-full bg-sidebar/50 backdrop-blur-sm border-r border-sidebar-border">
+    <div 
+      className="flex flex-col h-full bg-sidebar/50 backdrop-blur-sm border-r border-sidebar-border"
+      style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+    >
       <div className="p-6">
         <div className="flex items-center gap-2 mb-2">
           <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-foreground">
@@ -180,24 +183,29 @@ export function Layout({ children, dueDate, setDueDate, appMode = "pregnancy", b
         <SidebarContent />
       </div>
 
+      {/* Mobile hamburger - subtle floating button, visible on all pages */}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="md:hidden fixed z-50 rounded-full"
+        style={{
+          top: "calc(env(safe-area-inset-top, 0px) + 12px)",
+          left: "calc(env(safe-area-inset-left, 0px) + 16px)",
+        }}
+        onClick={() => setIsMobileOpen(true)}
+      >
+        <Menu className="w-5 h-5" />
+      </Button>
+
+      {/* Mobile sidebar sheet */}
       <Sheet open={isMobileOpen} onOpenChange={setIsMobileOpen}>
-        <SheetTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="md:hidden fixed left-4 z-50"
-            style={{ top: "calc(env(safe-area-inset-top, 0px) + 16px)" }}
-          >
-            <Menu className="w-6 h-6" />
-          </Button>
-        </SheetTrigger>
         <SheetContent side="left" className="p-0 w-64 border-r border-sidebar-border">
           <SidebarContent />
         </SheetContent>
       </Sheet>
 
-      <main className="flex-1 md:ml-64 relative">
-        <div className="max-w-5xl mx-auto p-4 md:p-8 pt-16 md:pt-8 min-h-screen">
+      <main className="flex-1 md:ml-64">
+        <div className="max-w-5xl mx-auto px-4 md:px-8 pb-4 md:pb-8 md:pt-8 min-h-screen safe-area-top">
           {children}
         </div>
       </main>

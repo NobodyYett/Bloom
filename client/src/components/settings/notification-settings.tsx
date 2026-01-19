@@ -4,11 +4,13 @@ import { useState, useEffect } from "react";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { Bell, Calendar, Clock } from "lucide-react";
+import { Bell, Calendar, Clock, Sun, Sunrise, Moon } from "lucide-react";
 import {
   isNotificationsSupported,
   isMorningCheckinEnabled,
   toggleMorningCheckin,
+  isMiddayWellnessEnabled,
+  toggleMiddayWellness,
   isEveningCheckinEnabled,
   toggleEveningCheckin,
   isAppointmentRemindersEnabled,
@@ -17,6 +19,7 @@ import {
   setDefaultReminderTimes,
   hasNotificationPermission,
   requestNotificationPermission,
+  cancelAllDailyNotifications,
   REMINDER_TIME_OPTIONS,
   type ReminderTimePreference,
 } from "@/lib/notifications";
@@ -31,6 +34,7 @@ export function NotificationSettings({ isPartnerView }: NotificationSettingsProp
   const { toast } = useToast();
 
   const [morningCheckinEnabled, setMorningCheckinEnabled] = useState(false);
+  const [middayWellnessEnabled, setMiddayWellnessEnabled] = useState(false);
   const [eveningCheckinEnabled, setEveningCheckinEnabled] = useState(false);
   const [appointmentRemindersEnabled, setAppointmentRemindersEnabled] = useState(false);
   const [reminderTimes, setReminderTimesState] = useState<ReminderTimePreference>({
@@ -40,6 +44,7 @@ export function NotificationSettings({ isPartnerView }: NotificationSettingsProp
   const [notificationsAvailable, setNotificationsAvailable] = useState(false);
   const [permissionGranted, setPermissionGranted] = useState(false);
   const [togglingMorning, setTogglingMorning] = useState(false);
+  const [togglingMidday, setTogglingMidday] = useState(false);
   const [togglingEvening, setTogglingEvening] = useState(false);
   const [togglingAppointments, setTogglingAppointments] = useState(false);
 
@@ -51,6 +56,7 @@ export function NotificationSettings({ isPartnerView }: NotificationSettingsProp
         const hasPermission = await hasNotificationPermission();
         setPermissionGranted(hasPermission);
         setMorningCheckinEnabled(isMorningCheckinEnabled());
+        setMiddayWellnessEnabled(isMiddayWellnessEnabled());
         setEveningCheckinEnabled(isEveningCheckinEnabled());
         setAppointmentRemindersEnabled(isAppointmentRemindersEnabled());
         setReminderTimesState(getDefaultReminderTimes());
@@ -81,14 +87,47 @@ export function NotificationSettings({ isPartnerView }: NotificationSettingsProp
         toast({
           title: enabled ? "Morning check-in enabled" : "Morning check-in disabled",
           description: enabled
-            ? "You'll receive a gentle reminder at 8:30am each morning."
-            : "Morning check-in reminders have been turned off.",
+            ? "You'll receive a gentle reminder at 8:30am."
+            : "Morning reminders turned off.",
         });
       }
     } catch (error) {
       console.error("Failed to toggle morning check-in:", error);
     } finally {
       setTogglingMorning(false);
+    }
+  }
+
+  async function handleMiddayWellnessToggle(enabled: boolean) {
+    setTogglingMidday(true);
+    try {
+      if (enabled && !permissionGranted) {
+        const granted = await requestNotificationPermission();
+        setPermissionGranted(granted);
+        if (!granted) {
+          toast({
+            title: "Notifications disabled",
+            description: "Please enable notifications in your device settings.",
+            variant: "destructive",
+          });
+          setTogglingMidday(false);
+          return;
+        }
+      }
+      const success = await toggleMiddayWellness(enabled);
+      if (success) {
+        setMiddayWellnessEnabled(enabled);
+        toast({
+          title: enabled ? "Midday wellness enabled" : "Midday wellness disabled",
+          description: enabled
+            ? "You'll receive a wellness tip at 12:30pm."
+            : "Midday reminders turned off.",
+        });
+      }
+    } catch (error) {
+      console.error("Failed to toggle midday wellness:", error);
+    } finally {
+      setTogglingMidday(false);
     }
   }
 
@@ -114,8 +153,8 @@ export function NotificationSettings({ isPartnerView }: NotificationSettingsProp
         toast({
           title: enabled ? "Evening check-in enabled" : "Evening check-in disabled",
           description: enabled
-            ? "You'll receive a gentle reminder at 8:30pm to reflect on your day."
-            : "Evening check-in reminders have been turned off.",
+            ? "You'll receive a gentle reminder at 8:30pm."
+            : "Evening reminders turned off.",
         });
       }
     } catch (error) {
@@ -153,7 +192,7 @@ export function NotificationSettings({ isPartnerView }: NotificationSettingsProp
           title: enabled ? "Appointment reminders enabled" : "Appointment reminders disabled",
           description: enabled
             ? "You'll be reminded before upcoming appointments."
-            : "Appointment reminders have been turned off.",
+            : "Appointment reminders turned off.",
         });
       }
     } catch (error) {
@@ -185,59 +224,91 @@ export function NotificationSettings({ isPartnerView }: NotificationSettingsProp
         </h2>
         <p className="text-sm text-muted-foreground">Manage your reminder preferences.</p>
       </div>
-      <div className="p-6 space-y-6">
-        {/* Morning Check-in */}
-        <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            <label className="text-sm font-medium">Morning check-in</label>
-            <p className="text-xs text-muted-foreground">
-              {notificationsAvailable 
-                ? "\"How did you sleep?\" at 8:30am" 
-                : "Available on iOS and Android apps"
-              }
-            </p>
-          </div>
-          <Switch
-            checked={morningCheckinEnabled}
-            onCheckedChange={handleMorningCheckinToggle}
-            disabled={!notificationsAvailable || togglingMorning}
-          />
-        </div>
-
-        {/* Evening Check-in - only for mom */}
-        {!isPartnerView && (
+      <div className="p-6 space-y-5">
+        {/* Daily Check-ins Section */}
+        <div className="space-y-4">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Daily Check-ins</p>
+          
+          {/* Morning Check-in */}
           <div className="flex items-center justify-between">
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Evening check-in</label>
-              <p className="text-xs text-muted-foreground">
-                {notificationsAvailable 
-                  ? "\"How was your day?\" at 8:30pm" 
-                  : "Available on iOS and Android apps"
-                }
-              </p>
+            <div className="flex items-start gap-3">
+              <Sunrise className="w-4 h-4 mt-0.5 text-amber-500" />
+              <div className="space-y-0.5">
+                <label className="text-sm font-medium">Morning</label>
+                <p className="text-xs text-muted-foreground">
+                  {notificationsAvailable 
+                    ? "\"How did you sleep?\" · 8:30am" 
+                    : "Available on iOS and Android"
+                  }
+                </p>
+              </div>
             </div>
             <Switch
-              checked={eveningCheckinEnabled}
-              onCheckedChange={handleEveningCheckinToggle}
-              disabled={!notificationsAvailable || togglingEvening}
+              checked={morningCheckinEnabled}
+              onCheckedChange={handleMorningCheckinToggle}
+              disabled={!notificationsAvailable || togglingMorning}
             />
           </div>
-        )}
+
+          {/* Midday Wellness */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-start gap-3">
+              <Sun className="w-4 h-4 mt-0.5 text-yellow-500" />
+              <div className="space-y-0.5">
+                <label className="text-sm font-medium">Midday</label>
+                <p className="text-xs text-muted-foreground">
+                  {notificationsAvailable 
+                    ? "Wellness tips · 12:30pm" 
+                    : "Available on iOS and Android"
+                  }
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={middayWellnessEnabled}
+              onCheckedChange={handleMiddayWellnessToggle}
+              disabled={!notificationsAvailable || togglingMidday}
+            />
+          </div>
+
+          {/* Evening Check-in - only for mom */}
+          {!isPartnerView && (
+            <div className="flex items-center justify-between">
+              <div className="flex items-start gap-3">
+                <Moon className="w-4 h-4 mt-0.5 text-indigo-400" />
+                <div className="space-y-0.5">
+                  <label className="text-sm font-medium">Evening</label>
+                  <p className="text-xs text-muted-foreground">
+                    {notificationsAvailable 
+                      ? "\"How was your day?\" · 8:30pm" 
+                      : "Available on iOS and Android"
+                    }
+                  </p>
+                </div>
+              </div>
+              <Switch
+                checked={eveningCheckinEnabled}
+                onCheckedChange={handleEveningCheckinToggle}
+                disabled={!notificationsAvailable || togglingEvening}
+              />
+            </div>
+          )}
+        </div>
 
         {/* Appointment Reminders */}
         <div className="pt-4 border-t border-border">
           <div className="flex items-center justify-between mb-4">
-            <div className="space-y-1">
-              <label className="text-sm font-medium flex items-center gap-2">
-                <Calendar className="w-4 h-4" />
-                Appointment reminders
-              </label>
-              <p className="text-xs text-muted-foreground">
-                {notificationsAvailable 
-                  ? "Get reminded before upcoming appointments" 
-                  : "Available on iOS and Android apps"
-                }
-              </p>
+            <div className="flex items-start gap-3">
+              <Calendar className="w-4 h-4 mt-0.5 text-primary" />
+              <div className="space-y-0.5">
+                <label className="text-sm font-medium">Appointment reminders</label>
+                <p className="text-xs text-muted-foreground">
+                  {notificationsAvailable 
+                    ? "Before upcoming appointments" 
+                    : "Available on iOS and Android"
+                  }
+                </p>
+              </div>
             </div>
             <Switch
               checked={appointmentRemindersEnabled}
@@ -247,7 +318,7 @@ export function NotificationSettings({ isPartnerView }: NotificationSettingsProp
           </div>
 
           {appointmentRemindersEnabled && notificationsAvailable && (
-            <div className="space-y-4 pl-6 border-l-2 border-primary/20 ml-2">
+            <div className="space-y-4 pl-7 ml-2 border-l-2 border-primary/20">
               <div className="space-y-2">
                 <label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
                   <Clock className="w-3 h-3" />
@@ -285,15 +356,15 @@ export function NotificationSettings({ isPartnerView }: NotificationSettingsProp
               </div>
 
               <p className="text-xs text-muted-foreground">
-                These defaults apply to new appointments. You can customize each appointment individually.
+                Defaults for new appointments. Customize individually when adding.
               </p>
             </div>
           )}
         </div>
 
         {!permissionGranted && notificationsAvailable && (
-          <p className="text-xs text-amber-600 dark:text-amber-400">
-            Notification permission not granted. Enable a toggle above to request permission.
+          <p className="text-xs text-amber-600 dark:text-amber-400 pt-2">
+            Enable a toggle above to request notification permission.
           </p>
         )}
       </div>
